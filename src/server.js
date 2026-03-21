@@ -107,29 +107,65 @@ async function processJob(jobId) {
 
     const imageUrl = job.payload.images[0];
     const voiceUrl = job.payload.voiceMp3;
+    const musicUrl = job.payload.musicMp3;
+    const musicVolume = Number(job.payload.musicVolume ?? 0.15);
 
     const imagePath = path.join(jobDir, `image${getExtFromUrl(imageUrl, '.jpg')}`);
     const voicePath = path.join(jobDir, `voice${getExtFromUrl(voiceUrl, '.mp3')}`);
+    const musicPath = musicUrl
+      ? path.join(jobDir, `music${getExtFromUrl(musicUrl, '.mp3')}`)
+      : null;
     const outputPath = path.join(process.cwd(), 'storage', 'output', `${jobId}.mp4`);
 
     await downloadToFile(imageUrl, imagePath);
     await downloadToFile(voiceUrl, voicePath);
 
-    const ffmpegArgs = [
-      '-y',
-      '-loop', '1',
-      '-i', imagePath,
-      '-i', voicePath,
-      '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p',
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',
-      '-tune', 'stillimage',
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      '-movflags', '+faststart',
-      '-shortest',
-      outputPath
-    ];
+    if (musicUrl && musicPath) {
+      await downloadToFile(musicUrl, musicPath);
+    }
+
+    let ffmpegArgs;
+
+    if (musicUrl && musicPath) {
+      ffmpegArgs = [
+        '-y',
+        '-loop', '1',
+        '-i', imagePath,
+        '-i', voicePath,
+        '-stream_loop', '-1',
+        '-i', musicPath,
+        '-filter_complex',
+        `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p[v];` +
+        `[2:a]volume=${musicVolume}[music];` +
+        `[1:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]`,
+        '-map', '[v]',
+        '-map', '[a]',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-tune', 'stillimage',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-movflags', '+faststart',
+        '-shortest',
+        outputPath
+      ];
+    } else {
+      ffmpegArgs = [
+        '-y',
+        '-loop', '1',
+        '-i', imagePath,
+        '-i', voicePath,
+        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-tune', 'stillimage',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-movflags', '+faststart',
+        '-shortest',
+        outputPath
+      ];
+    }
 
     await runFfmpeg(ffmpegArgs);
 
