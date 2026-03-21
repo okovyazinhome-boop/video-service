@@ -101,6 +101,19 @@ app.post('/render', authMiddleware, (req, res) => {
     error: null
   });
 
+  setTimeout(() => {
+    const job = jobs.get(jobId);
+    if (!job) return;
+    job.status = 'processing';
+  }, 2000);
+
+  setTimeout(() => {
+    const job = jobs.get(jobId);
+    if (!job) return;
+    job.status = 'done';
+    job.videoUrl = 'https://samplelib.com/lib/preview/mp4/sample-5s.mp4';
+  }, 5000);
+
   res.json({
     ok: true,
     jobId,
