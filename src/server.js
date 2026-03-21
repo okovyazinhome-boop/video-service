@@ -48,7 +48,7 @@ function getExtFromUrl(fileUrl, fallback) {
     const urlObj = new URL(fileUrl);
     const ext = path.extname(urlObj.pathname);
     return ext || fallback;
-  } catch {
+  } catch (e) {
     return fallback;
   }
 }
@@ -79,6 +79,10 @@ function runFfmpeg(args) {
 
     ffmpeg.stderr.on('data', (data) => {
       stderr += data.toString();
+    });
+
+    ffmpeg.on('error', (error) => {
+      reject(error);
     });
 
     ffmpeg.on('close', (code) => {
@@ -154,7 +158,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.post('/render', authMiddleware, async (req, res) => {
+app.post('/render', authMiddleware, (req, res) => {
   const {
     images = [],
     voiceMp3 = '',
@@ -166,8 +170,6 @@ app.post('/render', authMiddleware, async (req, res) => {
     subtitleStyle = {},
     logoUrl = ''
   } = req.body || {};
-
-   } = req.body || {};
 
   if (!Array.isArray(images) || images.length === 0) {
     return res.status(400).json({
