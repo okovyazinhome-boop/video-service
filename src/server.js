@@ -120,7 +120,7 @@ async function processJob(jobId) {
       '-loop', '1',
       '-i', imagePath,
       '-i', voicePath,
-      '-vf', 'scale=1080:1920:force_original_aspect_ratio=cover,crop=1080:1920,format=yuv420p',
+      '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p',
       '-c:v', 'libx264',
       '-preset', 'veryfast',
       '-tune', 'stillimage',
