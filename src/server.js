@@ -160,7 +160,7 @@ function getAllowedTransition(transitionType) {
 }
 
 function formatAssTime(seconds) {
-  const totalCs = Math.max(0, Math.round(seconds * 100));
+  const totalCs = Math.max(0, Math.round(Number(seconds || 0) * 100));
   const hours = Math.floor(totalCs / 360000);
   const minutes = Math.floor((totalCs % 360000) / 6000);
   const secs = Math.floor((totalCs % 6000) / 100);
@@ -173,6 +173,14 @@ function assColorFromHex(hex, fallback = '&H00FFFFFF') {
   if (!hex || typeof hex !== 'string') return fallback;
 
   const normalized = hex.trim().replace('#', '');
+
+  if (/^[0-9a-fA-F]{3}$/.test(normalized)) {
+    const r = normalized[0] + normalized[0];
+    const g = normalized[1] + normalized[1];
+    const b = normalized[2] + normalized[2];
+    return `&H00${b}${g}${r}`.toUpperCase();
+  }
+
   if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return fallback;
 
   const r = normalized.slice(0, 2);
@@ -187,42 +195,203 @@ function sanitizeAssText(text) {
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .replace(/[{}]/g, '')
+    .replace(/\\/g, '')
     .replace(/\s+\n/g, '\n')
     .replace(/\n\s+/g, '\n')
     .replace(/[ \t]+/g, ' ')
+    .replace(/\n{2,}/g, '\n')
     .trim();
 }
 
-function wrapAssText(text, maxCharsPerLine = 28) {
-  const clean = sanitizeAssText(text);
-  if (!clean) return '';
+function splitWrappedLines(text, maxCharsPerLine = 28) {
+  const clean = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
+  if (!clean) return [];
 
-  const paragraphs = clean.split('\n').map((p) => p.trim()).filter(Boolean);
+  const words = clean.split(' ').filter(Boolean);
   const lines = [];
+  let currentLine = '';
 
-  for (const paragraph of paragraphs) {
-    const words = paragraph.split(' ').filter(Boolean);
-    let currentLine = '';
+  for (const word of words) {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
 
-    for (const word of words) {
-      const nextLine = currentLine ? `${currentLine} ${word}` : word;
-
-      if (nextLine.length <= maxCharsPerLine) {
-        currentLine = nextLine;
-      } else {
-        if (currentLine) {
-          lines.push(currentLine);
-        }
-        currentLine = word;
+    if (nextLine.length <= maxCharsPerLine) {
+      currentLine = nextLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
       }
-    }
-
-    if (currentLine) {
-      lines.push(currentLine);
+      currentLine = word;
     }
   }
 
-  return lines.join('\\N');
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+function wrapAssText(text, maxCharsPerLine = 28) {
+  return splitWrappedLines(text, maxCharsPerLine).join('\\N');
+}
+
+function countWrappedLines(text, maxCharsPerLine = 28) {
+  return splitWrappedLines(text, maxCharsPerLine).length;
+}
+
+function splitChunkBalanced(text) {
+  const clean = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
+  const words = clean.split(' ').filter(Boolean);
+
+  if (words.length <= 1) {
+    return [clean];
+  }
+
+  let bestIndex = Math.floor(words.length / 2);
+  let bestScore = Infinity;
+
+  for (let i = 1; i < words.length; i++) {
+    const left = words.slice(0, i).join(' ');
+    const right = words.slice(i).join(' ');
+    const score = Math.abs(left.length - right.length);
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+
+  return [
+    words.slice(0, bestIndex).join(' '),
+    words.slice(bestIndex).join(' ')
+  ];
+}
+
+function enforceMaxLines(chunks, maxCharsPerLine = 28, maxLines = 2) {
+  const result = [];
+
+  for (const chunk of chunks) {
+    const clean = sanitizeAssText(chunk).replace(/\n+/g, ' ').trim();
+    if (!clean) continue;
+
+    const linesCount = countWrappedLines(clean, maxCharsPerLine);
+
+    if (linesCount <= maxLines) {
+      result.push(clean);
+      continue;
+    }
+
+    const parts = splitChunkBalanced(clean);
+
+    if (parts.length <= 1 || parts[0] === clean) {
+      result.push(clean);
+      continue;
+    }
+
+    result.push(...enforceMaxLines(parts, maxCharsPerLine, maxLines));
+  }
+
+  return result;
+}
+
+function splitTextToSubtitleChunks(text, options = {}) {
+  const maxCharsPerLine = Number(options.maxCharsPerLine) || 28;
+  const maxLines = Number(options.maxLines) || 2;
+  const maxPhraseChars = Number(options.maxPhraseChars) || (maxCharsPerLine * maxLines);
+
+  const normalized = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
+  if (!normalized) return [];
+
+  const words = normalized.split(' ').filter(Boolean);
+  const chunks = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    const isHardBreak = /[.!?…]$/.test(word);
+    const isSoftBreak = /[,;:]$/.test(word);
+
+    if (candidate.length > maxPhraseChars) {
+      if (current) {
+        chunks.push(current.trim());
+        current = word;
+      } else {
+        chunks.push(word.trim());
+        current = '';
+      }
+      continue;
+    }
+
+    current = candidate;
+
+    if (isHardBreak || (isSoftBreak && current.length >= Math.floor(maxPhraseChars * 0.65))) {
+      chunks.push(current.trim());
+      current = '';
+    }
+  }
+
+  if (current) {
+    chunks.push(current.trim());
+  }
+
+  return enforceMaxLines(chunks, maxCharsPerLine, maxLines);
+}
+
+function buildTimedDialogueEvents({
+  subtitlesText,
+  duration,
+  subtitleStyle = {}
+}) {
+  const totalDuration = Math.max(0.1, Number(duration) || 0.1);
+  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
+  const maxLines = Number(subtitleStyle.maxLines) || 2;
+  const maxPhraseChars = Number(subtitleStyle.maxPhraseChars) || (maxCharsPerLine * maxLines);
+
+  let chunks = splitTextToSubtitleChunks(subtitlesText, {
+    maxCharsPerLine,
+    maxLines,
+    maxPhraseChars
+  });
+
+  if (!chunks.length) {
+    return [];
+  }
+
+  let minPhraseDuration = Number(subtitleStyle.minPhraseDuration) || 0.9;
+
+  if ((chunks.length * minPhraseDuration) > totalDuration) {
+    minPhraseDuration = Math.max(0.35, (totalDuration / chunks.length) * 0.85);
+  }
+
+  const weights = chunks.map((chunk) => Math.max(1, sanitizeAssText(chunk).length));
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+  const reservedMinDuration = minPhraseDuration * chunks.length;
+  const extraDuration = Math.max(0, totalDuration - reservedMinDuration);
+
+  const chunkDurations = chunks.map((chunk, index) => {
+    const extra = totalWeight > 0 ? (weights[index] / totalWeight) * extraDuration : 0;
+    return minPhraseDuration + extra;
+  });
+
+  const events = [];
+  let cursor = 0;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const start = cursor;
+    const end = i === chunks.length - 1
+      ? totalDuration
+      : Math.min(totalDuration, cursor + chunkDurations[i]);
+
+    events.push({
+      start,
+      end,
+      text: wrapAssText(chunks[i], maxCharsPerLine)
+    });
+
+    cursor = end;
+  }
+
+  return events;
 }
 
 function escapeFfmpegFilterPath(filePath) {
@@ -240,22 +409,24 @@ function buildAssContent({
   subtitleStyle = {}
 }) {
   const fontName = subtitleStyle.fontName || 'Arial';
-  const fontSize = Number(subtitleStyle.fontSize || Math.max(20, Math.round(height * 0.022)));
-  const marginV = Number(subtitleStyle.marginV || Math.round(height * 0.075));
-  const outline = Number(subtitleStyle.outline || 3);
+  const fontSize = Number(subtitleStyle.fontSize || Math.max(24, Math.round(height * 0.026)));
+  const marginV = Number(subtitleStyle.marginV || Math.round(height * 0.11));
+  const outline = Number(subtitleStyle.outline || 2);
   const shadow = Number(subtitleStyle.shadow || 0);
   const bold = subtitleStyle.bold === false ? 0 : 1;
   const alignment = Number(subtitleStyle.alignment || 2);
-  const marginL = Number(subtitleStyle.marginL || 80);
-  const marginR = Number(subtitleStyle.marginR || 80);
-  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine || 28);
+  const marginL = Number(subtitleStyle.marginL || 60);
+  const marginR = Number(subtitleStyle.marginR || 60);
 
   const primaryColour = assColorFromHex(subtitleStyle.primaryColor || '#FFFFFF', '&H00FFFFFF');
   const outlineColour = assColorFromHex(subtitleStyle.outlineColor || '#000000', '&H00000000');
   const backColour = assColorFromHex(subtitleStyle.backColor || '#000000', '&H00000000');
 
-  const wrappedText = wrapAssText(subtitlesText, maxCharsPerLine);
-  const endTime = formatAssTime(duration);
+  const events = buildTimedDialogueEvents({
+    subtitlesText,
+    duration,
+    subtitleStyle
+  });
 
   return `[Script Info]
 ScriptType: v4.00+
@@ -270,7 +441,7 @@ Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outli
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,${endTime},Default,,0,0,0,,${wrappedText}
+${events.map((event) => `Dialogue: 0,${formatAssTime(event.start)},${formatAssTime(event.end)},Default,,0,0,0,,${event.text}`).join('\n')}
 `;
 }
 
