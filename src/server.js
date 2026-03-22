@@ -53,6 +53,28 @@ function getExtFromUrl(fileUrl, fallback) {
   }
 }
 
+function parseResolution(resolution) {
+  const fallback = { width: 1080, height: 1920 };
+
+  if (!resolution || typeof resolution !== 'string') {
+    return fallback;
+  }
+
+  const match = resolution.match(/^(\d+)x(\d+)$/i);
+  if (!match) {
+    return fallback;
+  }
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return fallback;
+  }
+
+  return { width, height };
+}
+
 async function downloadToFile(fileUrl, outputPath) {
   const response = await axios({
     method: 'get',
@@ -125,6 +147,18 @@ async function getMediaDuration(filePath) {
   return duration;
 }
 
+function getAllowedTransition(transitionType) {
+  const allowedTransitions = [
+    'fade',
+    'smoothleft',
+    'smoothright',
+    'slideleft',
+    'slideright'
+  ];
+
+  return allowedTransitions.includes(transitionType) ? transitionType : 'fade';
+}
+
 async function processJob(jobId) {
   const job = jobs.get(jobId);
   if (!job) return;
@@ -139,14 +173,13 @@ async function processJob(jobId) {
     const voiceUrl = job.payload.voiceMp3;
     const musicUrl = job.payload.musicMp3;
     const musicVolume = Number(job.payload.musicVolume ?? 0.15);
+    const transitionType = getAllowedTransition(job.payload.transitionType);
+    const { width, height } = parseResolution(job.payload.resolution);
 
     const voicePath = path.join(jobDir, `voice${getExtFromUrl(voiceUrl, '.mp3')}`);
     const musicPath = musicUrl
       ? path.join(jobDir, `music${getExtFromUrl(musicUrl, '.mp3')}`)
       : null;
-
-    const slideshowPath = path.join(jobDir, 'slideshow.mp4');
-    const listPath = path.join(jobDir, 'list.txt');
     const outputPath = path.join(process.cwd(), 'storage', 'output', `${jobId}.mp4`);
 
     const imagePaths = [];
@@ -164,89 +197,119 @@ async function processJob(jobId) {
     }
 
     const voiceDuration = await getMediaDuration(voicePath);
-    const perImageDuration = Number((voiceDuration / imagePaths.length).toFixed(3));
 
-    if (!Number.isFinite(perImageDuration) || perImageDuration <= 0) {
+    if (!Number.isFinite(voiceDuration) || voiceDuration <= 0) {
+      throw new Error('Invalid voice duration');
+    }
+
+    const imageCount = imagePaths.length;
+
+    let transitionDuration = 0;
+    if (imageCount > 1) {
+      const safeTransition = Math.min(0.5, Math.max(0.15, (voiceDuration / imageCount) * 0.6));
+      transitionDuration = Number(safeTransition.toFixed(3));
+    }
+
+    const inputImageDuration = imageCount === 1
+      ? Number(voiceDuration.toFixed(3))
+      : Number(((voiceDuration + ((imageCount - 1) * transitionDuration)) / imageCount).toFixed(3));
+
+    if (!Number.isFinite(inputImageDuration) || inputImageDuration <= 0) {
       throw new Error('Invalid per-image duration');
     }
 
-    const segmentPaths = [];
+    if (imageCount > 1 && inputImageDuration <= transitionDuration) {
+      throw new Error('Transition duration is too large for current voice duration');
+    }
+
+    const ffmpegArgs = ['-y'];
 
     for (let i = 0; i < imagePaths.length; i++) {
-      const segmentPath = path.join(jobDir, `segment_${i + 1}.mp4`);
-
-      const ffmpegArgs = [
-        '-y',
+      ffmpegArgs.push(
         '-loop', '1',
-        '-i', imagePaths[i],
-        '-t', String(perImageDuration),
-        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuv420p',
-        '-r', '25',
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-tune', 'stillimage',
-        '-pix_fmt', 'yuv420p',
-        '-an',
-        segmentPath
-      ];
-
-      await runFfmpeg(ffmpegArgs);
-      segmentPaths.push(segmentPath);
+        '-t', String(inputImageDuration),
+        '-i', imagePaths[i]
+      );
     }
 
-    const concatList = segmentPaths
-      .map((segmentPath) => `file '${segmentPath.replace(/'/g, `'\\''`)}'`)
-      .join('\n');
+    ffmpegArgs.push('-i', voicePath);
 
-    await fs.writeFile(listPath, concatList, 'utf8');
-
-    await runFfmpeg([
-      '-y',
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', listPath,
-      '-c', 'copy',
-      slideshowPath
-    ]);
-
-    let finalArgs;
+    const voiceInputIndex = imagePaths.length;
+    let musicInputIndex = null;
 
     if (musicUrl && musicPath) {
-      finalArgs = [
-        '-y',
-        '-i', slideshowPath,
-        '-i', voicePath,
+      ffmpegArgs.push(
         '-stream_loop', '-1',
-        '-i', musicPath,
-        '-filter_complex',
-        `[2:a]volume=${musicVolume}[music];` +
-        `[1:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]`,
-        '-map', '0:v',
-        '-map', '[a]',
-        '-c:v', 'copy',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-movflags', '+faststart',
-        '-shortest',
-        outputPath
-      ];
-    } else {
-      finalArgs = [
-        '-y',
-        '-i', slideshowPath,
-        '-i', voicePath,
-        '-map', '0:v',
-        '-map', '1:a',
-        '-c:v', 'copy',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-movflags', '+faststart',
-        '-shortest',
-        outputPath
-      ];
+        '-i', musicPath
+      );
+      musicInputIndex = imagePaths.length + 1;
     }
 
-    await runFfmpeg(finalArgs);
+    const filterParts = [];
+
+    for (let i = 0; i < imagePaths.length; i++) {
+      filterParts.push(
+        `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
+        `crop=${width}:${height},setsar=1,fps=25,format=yuv420p[v${i}]`
+      );
+    }
+
+    let finalVideoLabel = 'v0';
+
+    if (imageCount > 1) {
+      let previousLabel = 'v0';
+
+      for (let i = 1; i < imageCount; i++) {
+        const offset = Number(((inputImageDuration - transitionDuration) * i).toFixed(3));
+        const xfadeLabel = `x${i}`;
+
+        filterParts.push(
+          `[${previousLabel}][v${i}]xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset}[${xfadeLabel}]`
+        );
+
+        previousLabel = xfadeLabel;
+      }
+
+      finalVideoLabel = previousLabel;
+    }
+
+    if (musicUrl && musicPath && musicInputIndex !== null) {
+      filterParts.push(
+        `[${voiceInputIndex}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[voice]`
+      );
+      filterParts.push(
+        `[${musicInputIndex}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=${musicVolume}[music]`
+      );
+      filterParts.push(
+        `[voice][music]amix=inputs=2:duration=first:dropout_transition=2[a]`
+      );
+    }
+
+    ffmpegArgs.push(
+      '-filter_complex',
+      filterParts.join(';'),
+      '-map', `[${finalVideoLabel}]`
+    );
+
+    if (musicUrl && musicPath && musicInputIndex !== null) {
+      ffmpegArgs.push('-map', '[a]');
+    } else {
+      ffmpegArgs.push('-map', `${voiceInputIndex}:a`);
+    }
+
+    ffmpegArgs.push(
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-pix_fmt', 'yuv420p',
+      '-r', '25',
+      '-c:a', 'aac',
+      '-b:a', '192k',
+      '-movflags', '+faststart',
+      '-shortest',
+      outputPath
+    );
+
+    await runFfmpeg(ffmpegArgs);
 
     job.status = 'done';
     job.videoUrl = `${BASE_URL}/output/${jobId}.mp4`;
