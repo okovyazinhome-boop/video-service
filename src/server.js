@@ -294,47 +294,159 @@ function enforceMaxLines(chunks, maxCharsPerLine = 28, maxLines = 2) {
   return result;
 }
 
-function splitTextToSubtitleChunks(text, options = {}) {
-  const maxCharsPerLine = Number(options.maxCharsPerLine) || 28;
-  const maxLines = Number(options.maxLines) || 2;
-  const maxPhraseChars = Number(options.maxPhraseChars) || (maxCharsPerLine * maxLines);
+function splitLongTextByWords(text, maxPhraseChars = 48) {
+  const clean = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
+  if (!clean) return [];
 
-  const normalized = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
-  if (!normalized) return [];
-
-  const words = normalized.split(' ').filter(Boolean);
-  const chunks = [];
+  const words = clean.split(' ').filter(Boolean);
+  const result = [];
   let current = '';
 
   for (const word of words) {
     const candidate = current ? `${current} ${word}` : word;
-    const isHardBreak = /[.!?…]$/.test(word);
-    const isSoftBreak = /[,;:]$/.test(word);
 
-    if (candidate.length > maxPhraseChars) {
+    if (candidate.length <= maxPhraseChars) {
+      current = candidate;
+    } else {
       if (current) {
-        chunks.push(current.trim());
-        current = word;
-      } else {
-        chunks.push(word.trim());
-        current = '';
+        result.push(current.trim());
       }
-      continue;
-    }
-
-    current = candidate;
-
-    if (isHardBreak || (isSoftBreak && current.length >= Math.floor(maxPhraseChars * 0.65))) {
-      chunks.push(current.trim());
-      current = '';
+      current = word;
     }
   }
 
   if (current) {
-    chunks.push(current.trim());
+    result.push(current.trim());
   }
 
-  return enforceMaxLines(chunks, maxCharsPerLine, maxLines);
+  return result;
+}
+
+function splitIntoSentences(text) {
+  const clean = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
+  if (!clean) return [];
+
+  const result = [];
+  let current = '';
+
+  for (const char of clean) {
+    current += char;
+
+    if (/[.!?…]/.test(char)) {
+      result.push(current.trim());
+      current = '';
+    }
+  }
+
+  if (current.trim()) {
+    result.push(current.trim());
+  }
+
+  return result.filter(Boolean);
+}
+
+function splitSentenceBySoftBreaks(sentence) {
+  const clean = sanitizeAssText(sentence).replace(/\n+/g, ' ').trim();
+  if (!clean) return [];
+
+  const result = [];
+  let current = '';
+
+  for (const char of clean) {
+    current += char;
+
+    if (char === ',' || char === ';' || char === ':' || char === '—') {
+      result.push(current.trim());
+      current = '';
+    }
+  }
+
+  if (current.trim()) {
+    result.push(current.trim());
+  }
+
+  return result.filter(Boolean);
+}
+
+function mergeTinyChunks(chunks, maxPhraseChars = 48, minChunkChars = 12) {
+  const result = [];
+
+  for (const rawChunk of chunks) {
+    const chunk = sanitizeAssText(rawChunk).replace(/\n+/g, ' ').trim();
+    if (!chunk) continue;
+
+    if (!result.length) {
+      result.push(chunk);
+      continue;
+    }
+
+    const prev = result[result.length - 1];
+    const canMergeToPrev = `${prev} ${chunk}`.length <= maxPhraseChars;
+
+    if (chunk.length < minChunkChars && canMergeToPrev) {
+      result[result.length - 1] = `${prev} ${chunk}`.trim();
+    } else {
+      result.push(chunk);
+    }
+  }
+
+  return result;
+}
+
+function splitTextToSubtitleChunks(text, options = {}) {
+  const maxCharsPerLine = Number(options.maxCharsPerLine) || 28;
+  const maxLines = Number(options.maxLines) || 2;
+  const maxPhraseChars = Number(options.maxPhraseChars) || (maxCharsPerLine * maxLines);
+  const minChunkChars = Number(options.minChunkChars) || 12;
+
+  const normalized = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
+  if (!normalized) return [];
+
+  const sentences = splitIntoSentences(normalized);
+  const rawChunks = [];
+
+  for (const sentence of sentences) {
+    if (sentence.length <= maxPhraseChars) {
+      rawChunks.push(sentence);
+      continue;
+    }
+
+    const softParts = splitSentenceBySoftBreaks(sentence);
+
+    if (softParts.length <= 1) {
+      rawChunks.push(...splitLongTextByWords(sentence, maxPhraseChars));
+      continue;
+    }
+
+    let current = '';
+
+    for (const part of softParts) {
+      const candidate = current ? `${current} ${part}` : part;
+
+      if (candidate.length <= maxPhraseChars) {
+        current = candidate;
+      } else {
+        if (current) {
+          rawChunks.push(current.trim());
+        }
+
+        if (part.length <= maxPhraseChars) {
+          current = part;
+        } else {
+          rawChunks.push(...splitLongTextByWords(part, maxPhraseChars));
+          current = '';
+        }
+      }
+    }
+
+    if (current) {
+      rawChunks.push(current.trim());
+    }
+  }
+
+  const mergedChunks = mergeTinyChunks(rawChunks, maxPhraseChars, minChunkChars);
+
+  return enforceMaxLines(mergedChunks, maxCharsPerLine, maxLines);
 }
 
 function buildTimedDialogueEvents({
@@ -347,10 +459,11 @@ function buildTimedDialogueEvents({
   const maxLines = Number(subtitleStyle.maxLines) || 2;
   const maxPhraseChars = Number(subtitleStyle.maxPhraseChars) || (maxCharsPerLine * maxLines);
 
-  let chunks = splitTextToSubtitleChunks(subtitlesText, {
+  const chunks = splitTextToSubtitleChunks(subtitlesText, {
     maxCharsPerLine,
     maxLines,
-    maxPhraseChars
+    maxPhraseChars,
+    minChunkChars: subtitleStyle.minChunkChars
   });
 
   if (!chunks.length) {
