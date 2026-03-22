@@ -71,28 +71,58 @@ async function downloadToFile(fileUrl, outputPath) {
   });
 }
 
-function runFfmpeg(args) {
+function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', args);
+    const child = spawn(command, args, options);
 
+    let stdout = '';
     let stderr = '';
 
-    ffmpeg.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
+    if (child.stdout) {
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+    }
 
-    ffmpeg.on('error', (error) => {
+    if (child.stderr) {
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+    }
+
+    child.on('error', (error) => {
       reject(error);
     });
 
-    ffmpeg.on('close', (code) => {
+    child.on('close', (code) => {
       if (code === 0) {
-        resolve();
+        resolve({ stdout, stderr });
       } else {
-        reject(new Error(stderr || `ffmpeg exited with code ${code}`));
+        reject(new Error(stderr || `${command} exited with code ${code}`));
       }
     });
   });
+}
+
+function runFfmpeg(args, options = {}) {
+  return runCommand('ffmpeg', args, options);
+}
+
+async function getMediaDuration(filePath) {
+  const { stdout } = await runCommand('ffprobe', [
+    '-v', 'error',
+    '-show_entries', 'format=duration',
+    '-of', 'default=noprint_wrappers=1:nokey=1',
+    filePath
+  ]);
+
+  const duration = Number(stdout.trim());
+
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error(`Failed to get media duration for ${filePath}`);
+  }
+
+  return duration;
 }
 
 async function processJob(jobId) {
@@ -105,44 +135,95 @@ async function processJob(jobId) {
     const jobDir = path.join(process.cwd(), 'storage', 'jobs', jobId);
     await fs.ensureDir(jobDir);
 
-    const imageUrl = job.payload.images[0];
+    const imageUrls = job.payload.images || [];
     const voiceUrl = job.payload.voiceMp3;
     const musicUrl = job.payload.musicMp3;
     const musicVolume = Number(job.payload.musicVolume ?? 0.15);
 
-    const imagePath = path.join(jobDir, `image${getExtFromUrl(imageUrl, '.jpg')}`);
     const voicePath = path.join(jobDir, `voice${getExtFromUrl(voiceUrl, '.mp3')}`);
     const musicPath = musicUrl
       ? path.join(jobDir, `music${getExtFromUrl(musicUrl, '.mp3')}`)
       : null;
+
+    const slideshowPath = path.join(jobDir, 'slideshow.mp4');
+    const listPath = path.join(jobDir, 'list.txt');
     const outputPath = path.join(process.cwd(), 'storage', 'output', `${jobId}.mp4`);
 
-    await downloadToFile(imageUrl, imagePath);
+    const imagePaths = [];
+    for (let i = 0; i < imageUrls.length; i++) {
+      const imageUrl = imageUrls[i];
+      const imagePath = path.join(jobDir, `image_${i + 1}${getExtFromUrl(imageUrl, '.jpg')}`);
+      await downloadToFile(imageUrl, imagePath);
+      imagePaths.push(imagePath);
+    }
+
     await downloadToFile(voiceUrl, voicePath);
 
     if (musicUrl && musicPath) {
       await downloadToFile(musicUrl, musicPath);
     }
 
-    let ffmpegArgs;
+    const voiceDuration = await getMediaDuration(voicePath);
+    const perImageDuration = Number((voiceDuration / imagePaths.length).toFixed(3));
 
-    if (musicUrl && musicPath) {
-      ffmpegArgs = [
+    if (!Number.isFinite(perImageDuration) || perImageDuration <= 0) {
+      throw new Error('Invalid per-image duration');
+    }
+
+    const segmentPaths = [];
+
+    for (let i = 0; i < imagePaths.length; i++) {
+      const segmentPath = path.join(jobDir, `segment_${i + 1}.mp4`);
+
+      const ffmpegArgs = [
         '-y',
         '-loop', '1',
-        '-i', imagePath,
+        '-i', imagePaths[i],
+        '-t', String(perImageDuration),
+        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuv420p',
+        '-r', '25',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-tune', 'stillimage',
+        '-pix_fmt', 'yuv420p',
+        '-an',
+        segmentPath
+      ];
+
+      await runFfmpeg(ffmpegArgs);
+      segmentPaths.push(segmentPath);
+    }
+
+    const concatList = segmentPaths
+      .map((segmentPath) => `file '${segmentPath.replace(/'/g, `'\\''`)}'`)
+      .join('\n');
+
+    await fs.writeFile(listPath, concatList, 'utf8');
+
+    await runFfmpeg([
+      '-y',
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', listPath,
+      '-c', 'copy',
+      slideshowPath
+    ]);
+
+    let finalArgs;
+
+    if (musicUrl && musicPath) {
+      finalArgs = [
+        '-y',
+        '-i', slideshowPath,
         '-i', voicePath,
         '-stream_loop', '-1',
         '-i', musicPath,
         '-filter_complex',
-        `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p[v];` +
         `[2:a]volume=${musicVolume}[music];` +
         `[1:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]`,
-        '-map', '[v]',
+        '-map', '0:v',
         '-map', '[a]',
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-tune', 'stillimage',
+        '-c:v', 'copy',
         '-c:a', 'aac',
         '-b:a', '192k',
         '-movflags', '+faststart',
@@ -150,15 +231,13 @@ async function processJob(jobId) {
         outputPath
       ];
     } else {
-      ffmpegArgs = [
+      finalArgs = [
         '-y',
-        '-loop', '1',
-        '-i', imagePath,
+        '-i', slideshowPath,
         '-i', voicePath,
-        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p',
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-tune', 'stillimage',
+        '-map', '0:v',
+        '-map', '1:a',
+        '-c:v', 'copy',
         '-c:a', 'aac',
         '-b:a', '192k',
         '-movflags', '+faststart',
@@ -167,7 +246,7 @@ async function processJob(jobId) {
       ];
     }
 
-    await runFfmpeg(ffmpegArgs);
+    await runFfmpeg(finalArgs);
 
     job.status = 'done';
     job.videoUrl = `${BASE_URL}/output/${jobId}.mp4`;
