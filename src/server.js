@@ -159,6 +159,121 @@ function getAllowedTransition(transitionType) {
   return allowedTransitions.includes(transitionType) ? transitionType : 'fade';
 }
 
+function formatAssTime(seconds) {
+  const totalCs = Math.max(0, Math.round(seconds * 100));
+  const hours = Math.floor(totalCs / 360000);
+  const minutes = Math.floor((totalCs % 360000) / 6000);
+  const secs = Math.floor((totalCs % 6000) / 100);
+  const centis = totalCs % 100;
+
+  return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(centis).padStart(2, '0')}`;
+}
+
+function assColorFromHex(hex, fallback = '&H00FFFFFF') {
+  if (!hex || typeof hex !== 'string') return fallback;
+
+  const normalized = hex.trim().replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return fallback;
+
+  const r = normalized.slice(0, 2);
+  const g = normalized.slice(2, 4);
+  const b = normalized.slice(4, 6);
+
+  return `&H00${b}${g}${r}`.toUpperCase();
+}
+
+function sanitizeAssText(text) {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[{}]/g, '')
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n\s+/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
+function wrapAssText(text, maxCharsPerLine = 28) {
+  const clean = sanitizeAssText(text);
+  if (!clean) return '';
+
+  const paragraphs = clean.split('\n').map((p) => p.trim()).filter(Boolean);
+  const lines = [];
+
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(' ').filter(Boolean);
+    let currentLine = '';
+
+    for (const word of words) {
+      const nextLine = currentLine ? `${currentLine} ${word}` : word;
+
+      if (nextLine.length <= maxCharsPerLine) {
+        currentLine = nextLine;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+        currentLine = word;
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+
+  return lines.join('\\N');
+}
+
+function escapeFfmpegFilterPath(filePath) {
+  return filePath
+    .replace(/\\/g, '/')
+    .replace(/'/g, "\\'")
+    .replace(/:/g, '\\:');
+}
+
+function buildAssContent({
+  width,
+  height,
+  duration,
+  subtitlesText,
+  subtitleStyle = {}
+}) {
+  const fontName = subtitleStyle.fontName || 'Arial';
+  const fontSize = Number(subtitleStyle.fontSize || Math.max(20, Math.round(height * 0.022)));
+  const marginV = Number(subtitleStyle.marginV || Math.round(height * 0.075));
+  const outline = Number(subtitleStyle.outline || 3);
+  const shadow = Number(subtitleStyle.shadow || 0);
+  const bold = subtitleStyle.bold === false ? 0 : 1;
+  const alignment = Number(subtitleStyle.alignment || 2);
+  const marginL = Number(subtitleStyle.marginL || 80);
+  const marginR = Number(subtitleStyle.marginR || 80);
+  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine || 28);
+
+  const primaryColour = assColorFromHex(subtitleStyle.primaryColor || '#FFFFFF', '&H00FFFFFF');
+  const outlineColour = assColorFromHex(subtitleStyle.outlineColor || '#000000', '&H00000000');
+  const backColour = assColorFromHex(subtitleStyle.backColor || '#000000', '&H00000000');
+
+  const wrappedText = wrapAssText(subtitlesText, maxCharsPerLine);
+  const endTime = formatAssTime(duration);
+
+  return `[Script Info]
+ScriptType: v4.00+
+PlayResX: ${width}
+PlayResY: ${height}
+ScaledBorderAndShadow: yes
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,${endTime},Default,,0,0,0,,${wrappedText}
+`;
+}
+
 async function processJob(jobId) {
   const job = jobs.get(jobId);
   if (!job) return;
@@ -175,12 +290,16 @@ async function processJob(jobId) {
     const musicVolume = Number(job.payload.musicVolume ?? 0.15);
     const transitionType = getAllowedTransition(job.payload.transitionType);
     const { width, height } = parseResolution(job.payload.resolution);
+    const subtitlesText = String(job.payload.subtitlesText || '').trim();
+    const subtitleStyle = job.payload.subtitleStyle || {};
 
     const voicePath = path.join(jobDir, `voice${getExtFromUrl(voiceUrl, '.mp3')}`);
     const musicPath = musicUrl
       ? path.join(jobDir, `music${getExtFromUrl(musicUrl, '.mp3')}`)
       : null;
+    const subtitlesPath = path.join(jobDir, 'subtitles.ass');
     const outputPath = path.join(process.cwd(), 'storage', 'output', `${jobId}.mp4`);
+    const fontsDir = path.join(process.cwd(), 'storage', 'fonts');
 
     const imagePaths = [];
     for (let i = 0; i < imageUrls.length; i++) {
@@ -220,6 +339,18 @@ async function processJob(jobId) {
 
     if (imageCount > 1 && inputImageDuration <= transitionDuration) {
       throw new Error('Transition duration is too large for current voice duration');
+    }
+
+    if (subtitlesText) {
+      const assContent = buildAssContent({
+        width,
+        height,
+        duration: voiceDuration,
+        subtitlesText,
+        subtitleStyle
+      });
+
+      await fs.writeFile(subtitlesPath, assContent, 'utf8');
     }
 
     const ffmpegArgs = ['-y'];
@@ -271,6 +402,18 @@ async function processJob(jobId) {
       }
 
       finalVideoLabel = previousLabel;
+    }
+
+    if (subtitlesText) {
+      const escapedSubtitlesPath = escapeFfmpegFilterPath(subtitlesPath);
+      const escapedFontsDir = escapeFfmpegFilterPath(fontsDir);
+      const subtitleVideoLabel = 'vsub';
+
+      filterParts.push(
+        `[${finalVideoLabel}]subtitles='${escapedSubtitlesPath}':fontsdir='${escapedFontsDir}'[${subtitleVideoLabel}]`
+      );
+
+      finalVideoLabel = subtitleVideoLabel;
     }
 
     if (musicUrl && musicPath && musicInputIndex !== null) {
