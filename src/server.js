@@ -955,6 +955,62 @@ function escapeFfmpegFilterPath(filePath) {
     .replace(/:/g, '\\:');
 }
 
+function getImageMotionPreset(sceneIndex) {
+  if (sceneIndex === 0) {
+    return {
+      zoomStart: 1.0,
+      zoomStep: 0.0015,
+      zoomMax: 1.16,
+      xFactor: 0.50,
+      yFactor: 0.50
+    };
+  }
+
+  if (sceneIndex === 1) {
+    return {
+      zoomStart: 1.0,
+      zoomStep: 0.0013,
+      zoomMax: 1.14,
+      xFactor: 0.46,
+      yFactor: 0.40
+    };
+  }
+
+  const subtlePresets = [
+    { xFactor: 0.50, yFactor: 0.50 },
+    { xFactor: 0.48, yFactor: 0.45 },
+    { xFactor: 0.52, yFactor: 0.42 },
+    { xFactor: 0.47, yFactor: 0.54 }
+  ];
+
+  const subtle = subtlePresets[(sceneIndex - 2) % subtlePresets.length];
+
+  return {
+    zoomStart: 1.0,
+    zoomStep: 0.0007,
+    zoomMax: 1.07,
+    xFactor: subtle.xFactor,
+    yFactor: subtle.yFactor
+  };
+}
+
+function buildImageMotionFilter(scene, sceneIndex, width, height) {
+  const frames = Math.max(1, Math.ceil(Number(scene.inputDuration || 0) * 25));
+  const motion = getImageMotionPreset(sceneIndex);
+  const duration = Number(scene.inputDuration.toFixed(3));
+  const xExpr = `(iw-iw/zoom)*${motion.xFactor}`;
+  const yExpr = `(ih-ih/zoom)*${motion.yFactor}`;
+
+  return `[${sceneIndex}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
+    `crop=${width}:${height},` +
+    `zoompan=` +
+    `z='if(lte(on,1),${motion.zoomStart},min(zoom+${motion.zoomStep},${motion.zoomMax}))':` +
+    `x='${xExpr}':` +
+    `y='${yExpr}':` +
+    `d=${frames}:s=${width}x${height}:fps=25,` +
+    `setsar=1,format=yuv420p,trim=duration=${duration},setpts=PTS-STARTPTS[v${sceneIndex}]`;
+}
+
 function buildAssContent({
   width,
   height,
@@ -979,7 +1035,7 @@ function buildAssContent({
   const backColour = assColorFromHex(subtitleStyle.backColor || '#000000', '&H00000000');
 
   const activeWordTextColour = assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF');
-  const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#6B58F1', '&H00F1586B');
+  const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B');
   const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
 
   const normalizedWordTimings = normalizeWordTimings(wordTimings);
@@ -1152,9 +1208,7 @@ async function processJob(jobId) {
 
       if (scene.type === 'image') {
         filterParts.push(
-          `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-          `crop=${width}:${height},setsar=1,fps=25,format=yuv420p,` +
-          `trim=duration=${Number(scene.inputDuration.toFixed(3))},setpts=PTS-STARTPTS[v${i}]`
+          buildImageMotionFilter(scene, i, width, height)
         );
       } else {
         const padDuration = Math.max(0, Number(scene.inputDuration) - Number(scene.sourceDuration || 0));
