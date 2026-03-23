@@ -860,6 +860,94 @@ function buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle = 
   return result;
 }
 
+function normalizeWordTimings(wordTimings = []) {
+  if (!Array.isArray(wordTimings)) return [];
+
+  return wordTimings
+    .map((item) => ({
+      text: sanitizeAssText(item.text || '').replace(/\n+/g, ' ').trim(),
+      start: Number(item.start),
+      end: Number(item.end)
+    }))
+    .filter((item) =>
+      item.text &&
+      Number.isFinite(item.start) &&
+      Number.isFinite(item.end) &&
+      item.end > item.start
+    )
+    .sort((a, b) => a.start - b.start);
+}
+
+function buildPhrasesFromWordTimings(wordTimings, subtitleStyle = {}) {
+  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
+  const maxLines = Number(subtitleStyle.maxLines) || 2;
+  const maxPhraseChars = Number(subtitleStyle.maxPhraseChars) || (maxCharsPerLine * maxLines);
+
+  const phrases = [];
+  let current = [];
+
+  const flush = () => {
+    if (current.length) {
+      phrases.push(current);
+      current = [];
+    }
+  };
+
+  for (const word of wordTimings) {
+    const candidate = [...current, word];
+    const candidateText = candidate.map((w) => w.text).join(' ');
+    const candidateLines = countWrappedLines(candidateText, maxCharsPerLine);
+    const tooLong = candidateText.length > maxPhraseChars || candidateLines > maxLines;
+
+    if (current.length && tooLong) {
+      flush();
+    }
+
+    current.push(word);
+
+    if (/[.!?…]$/.test(word.text)) {
+      flush();
+    }
+  }
+
+  flush();
+  return phrases;
+}
+
+function buildWordHighlightEventsFromWordTimings(wordTimings, subtitleStyle = {}) {
+  const normalized = normalizeWordTimings(wordTimings);
+  if (!normalized.length) return [];
+
+  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
+  const phrases = buildPhrasesFromWordTimings(normalized, subtitleStyle);
+  const events = [];
+
+  for (const phrase of phrases) {
+    const phraseTokens = phrase.map((word, index) => ({
+      index,
+      text: word.text
+    }));
+
+    for (let i = 0; i < phrase.length; i++) {
+      const current = phrase[i];
+      const next = phrase[i + 1];
+
+      const start = current.start;
+      const end = next ? Math.max(current.end, next.start) : current.end;
+
+      if (end <= start) continue;
+
+      events.push({
+        start,
+        end,
+        text: buildHighlightedPhraseText(phraseTokens, i, maxCharsPerLine)
+      });
+    }
+  }
+
+  return events;
+}
+
 function escapeFfmpegFilterPath(filePath) {
   return filePath
     .replace(/\\/g, '/')
@@ -873,7 +961,8 @@ function buildAssContent({
   duration,
   subtitlesText,
   subtitleStyle = {},
-  scenePlan = []
+  scenePlan = [],
+  wordTimings = []
 }) {
   const fontName = subtitleStyle.fontName || 'Inter';
   const fontSize = Number(subtitleStyle.fontSize || Math.max(24, Math.round(height * 0.026)));
@@ -890,8 +979,10 @@ function buildAssContent({
   const backColour = assColorFromHex(subtitleStyle.backColor || '#000000', '&H00000000');
 
   const activeWordTextColour = assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF');
-  const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#7F41E0', '&H00E0417F');
+  const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#6B58F1', '&H00F1586B');
   const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
+
+  const normalizedWordTimings = normalizeWordTimings(wordTimings);
 
   const phraseEvents = scenePlan.length > 0
     ? buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle)
@@ -902,7 +993,11 @@ function buildAssContent({
       });
 
   const events = subtitleMode === 'word-highlight'
-    ? buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle)
+    ? (
+        normalizedWordTimings.length
+          ? buildWordHighlightEventsFromWordTimings(normalizedWordTimings, subtitleStyle)
+          : buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle)
+      )
     : phraseEvents;
 
   return `[Script Info]
@@ -941,6 +1036,7 @@ async function processJob(jobId) {
     const { width, height } = parseResolution(job.payload.resolution);
     const subtitlesText = String(job.payload.subtitlesText || '').trim();
     const subtitleStyle = job.payload.subtitleStyle || {};
+    const wordTimings = Array.isArray(job.payload.wordTimings) ? job.payload.wordTimings : [];
 
     if (!mediaItems.length) {
       throw new Error('media must be a non-empty array');
@@ -1015,7 +1111,8 @@ async function processJob(jobId) {
         duration: voiceDuration,
         subtitlesText,
         subtitleStyle,
-        scenePlan
+        scenePlan,
+        wordTimings
       });
 
       await fs.writeFile(subtitlesPath, assContent, 'utf8');
@@ -1184,12 +1281,13 @@ app.post('/render', authMiddleware, (req, res) => {
     images = [],
     voiceMp3 = '',
     musicMp3 = '',
+    musicVolume = 0.15,
     subtitlesText = '',
     transitionType = 'fade',
-    musicVolume = 0.15,
     resolution = '1080x1920',
     subtitleStyle = {},
-    logoUrl = ''
+    logoUrl = '',
+    wordTimings = []
   } = req.body || {};
 
   const normalizedMedia = normalizeMediaItems({ media, images });
@@ -1219,12 +1317,13 @@ app.post('/render', authMiddleware, (req, res) => {
       images,
       voiceMp3,
       musicMp3,
+      musicVolume,
       subtitlesText,
       transitionType,
-      musicVolume,
       resolution,
       subtitleStyle,
-      logoUrl
+      logoUrl,
+      wordTimings
     },
     videoUrl: null,
     error: null
