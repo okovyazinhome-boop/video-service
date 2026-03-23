@@ -160,15 +160,19 @@ function getAllowedTransition(transitionType) {
 }
 
 function guessMediaTypeFromUrl(fileUrl = '') {
-  const ext = path.extname(new URL(fileUrl).pathname).toLowerCase();
+  try {
+    const ext = path.extname(new URL(fileUrl).pathname).toLowerCase();
 
-  const videoExts = ['.mp4', '.mov', '.m4v', '.webm', '.mkv'];
-  const imageExts = ['.jpg', '.jpeg', '.png', '.webp'];
+    const videoExts = ['.mp4', '.mov', '.m4v', '.webm', '.mkv'];
+    const imageExts = ['.jpg', '.jpeg', '.png', '.webp'];
 
-  if (videoExts.includes(ext)) return 'video';
-  if (imageExts.includes(ext)) return 'image';
+    if (videoExts.includes(ext)) return 'video';
+    if (imageExts.includes(ext)) return 'image';
 
-  return 'image';
+    return 'image';
+  } catch (e) {
+    return 'image';
+  }
 }
 
 function normalizeMediaItems(payload = {}) {
@@ -191,226 +195,6 @@ function normalizeMediaItems(payload = {}) {
   }
 
   return [];
-}
-
-function splitTextIntoSemanticBlocks(text, blockCount) {
-  const normalized = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
-  if (!normalized) return Array.from({ length: blockCount }, () => '');
-  if (blockCount <= 1) return [normalized];
-
-  let pieces = [];
-  const sentences = splitIntoSentences(normalized);
-
-  for (const sentence of sentences) {
-    const softParts = splitSentenceBySoftBreaks(sentence);
-    if (sentence.length > 90 && softParts.length > 1) {
-      pieces.push(...softParts);
-    } else {
-      pieces.push(sentence);
-    }
-  }
-
-  pieces = pieces
-    .map((p) => sanitizeAssText(p).replace(/\n+/g, ' ').trim())
-    .filter(Boolean);
-
-  if (!pieces.length) {
-    return Array.from({ length: blockCount }, (_, i) => (i === 0 ? normalized : ''));
-  }
-
-  if (pieces.length <= blockCount) {
-    const padded = [...pieces];
-    while (padded.length < blockCount) padded.push('');
-    return padded;
-  }
-
-  const result = [];
-  let index = 0;
-  let remainingWeight = pieces.reduce((sum, piece) => sum + piece.length, 0);
-
-  for (let blockIndex = 0; blockIndex < blockCount; blockIndex++) {
-    const remainingBlocks = blockCount - blockIndex;
-
-    if (remainingBlocks === 1) {
-      result.push(pieces.slice(index).join(' ').trim());
-      break;
-    }
-
-    const targetWeight = remainingWeight / remainingBlocks;
-    let currentParts = [];
-    let currentWeight = 0;
-
-    while (index < pieces.length) {
-      const piece = pieces[index];
-      const pieceWeight = piece.length;
-      const remainingPiecesAfterTake = pieces.length - (index + 1);
-
-      currentParts.push(piece);
-      currentWeight += pieceWeight;
-      index += 1;
-
-      const mustLeaveAtLeastOnePiecePerBlock = remainingPiecesAfterTake >= (remainingBlocks - 1);
-
-      if (currentWeight >= targetWeight && mustLeaveAtLeastOnePiecePerBlock) {
-        break;
-      }
-
-      if (!mustLeaveAtLeastOnePiecePerBlock) {
-        break;
-      }
-    }
-
-    const blockText = currentParts.join(' ').trim();
-    result.push(blockText);
-    remainingWeight -= currentWeight;
-  }
-
-  while (result.length < blockCount) {
-    result.push('');
-  }
-
-  if (result.length > blockCount) {
-    const head = result.slice(0, blockCount - 1);
-    const tail = result.slice(blockCount - 1).join(' ').trim();
-    return [...head, tail];
-  }
-
-  return result;
-}
-
-function allocateDurationsByWeights(texts, totalDuration, minBlockDuration = 0.8) {
-  if (!texts.length) return [];
-
-  let effectiveMin = minBlockDuration;
-  if ((texts.length * effectiveMin) > totalDuration) {
-    effectiveMin = Math.max(0.35, (totalDuration / texts.length) * 0.75);
-  }
-
-  const weights = texts.map((text) => Math.max(1, sanitizeAssText(text).length));
-  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
-  const reservedMin = effectiveMin * texts.length;
-  const extraDuration = Math.max(0, totalDuration - reservedMin);
-
-  return texts.map((text, index) => {
-    const extra = totalWeight > 0 ? (weights[index] / totalWeight) * extraDuration : 0;
-    return effectiveMin + extra;
-  });
-}
-
-function buildScenePlan({
-  mediaItems,
-  voiceDuration,
-  subtitlesText,
-  subtitleStyle,
-  transitionDuration
-}) {
-  const allHaveNarration = mediaItems.every((item) => item.narrationText && item.narrationText.trim());
-
-  const blockTexts = allHaveNarration
-    ? mediaItems.map((item) => item.narrationText.trim())
-    : splitTextIntoSemanticBlocks(subtitlesText, mediaItems.length);
-
-  const visibleDurations = allocateDurationsByWeights(
-    blockTexts,
-    voiceDuration,
-    Number(subtitleStyle.minSceneDuration) || 0.8
-  );
-
-  let visibleStart = 0;
-
-  return mediaItems.map((item, index) => {
-    const visibleDuration = visibleDurations[index];
-    const inputDuration = index < mediaItems.length - 1
-      ? visibleDuration + transitionDuration
-      : visibleDuration;
-
-    const scene = {
-      ...item,
-      blockText: blockTexts[index] || '',
-      visibleStart,
-      visibleEnd: visibleStart + visibleDuration,
-      visibleDuration,
-      inputDuration
-    };
-
-    visibleStart += visibleDuration;
-    return scene;
-  });
-}
-
-function buildPhraseEventsForWindow({
-  text,
-  startTime,
-  duration,
-  subtitleStyle = {}
-}) {
-  const totalDuration = Math.max(0.1, Number(duration) || 0.1);
-  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
-  const maxLines = Number(subtitleStyle.maxLines) || 2;
-  const maxPhraseChars = Number(subtitleStyle.maxPhraseChars) || (maxCharsPerLine * maxLines);
-
-  const chunks = splitTextToSubtitleChunks(text, {
-    maxCharsPerLine,
-    maxLines,
-    maxPhraseChars,
-    minChunkChars: subtitleStyle.minChunkChars
-  });
-
-  if (!chunks.length) return [];
-
-  let minPhraseDuration = Number(subtitleStyle.minPhraseDuration) || 0.9;
-  if ((chunks.length * minPhraseDuration) > totalDuration) {
-    minPhraseDuration = Math.max(0.25, (totalDuration / chunks.length) * 0.75);
-  }
-
-  const weights = chunks.map((chunk) => Math.max(1, sanitizeAssText(chunk).length));
-  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
-  const reservedMinDuration = minPhraseDuration * chunks.length;
-  const extraDuration = Math.max(0, totalDuration - reservedMinDuration);
-
-  const chunkDurations = chunks.map((chunk, index) => {
-    const extra = totalWeight > 0 ? (weights[index] / totalWeight) * extraDuration : 0;
-    return minPhraseDuration + extra;
-  });
-
-  const events = [];
-  let cursor = 0;
-
-  for (let i = 0; i < chunks.length; i++) {
-    const localStart = cursor;
-    const localEnd = i === chunks.length - 1
-      ? totalDuration
-      : Math.min(totalDuration, cursor + chunkDurations[i]);
-
-    events.push({
-      start: startTime + localStart,
-      end: startTime + localEnd,
-      text: wrapAssText(chunks[i], maxCharsPerLine)
-    });
-
-    cursor = localEnd;
-  }
-
-  return events;
-}
-
-function buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle = {}) {
-  const events = [];
-
-  for (const scene of scenePlan) {
-    if (!scene.blockText) continue;
-
-    const sceneEvents = buildPhraseEventsForWindow({
-      text: scene.blockText,
-      startTime: scene.visibleStart,
-      duration: scene.visibleDuration,
-      subtitleStyle
-    });
-
-    events.push(...sceneEvents);
-  }
-
-  return events;
 }
 
 function formatAssTime(seconds) {
@@ -701,6 +485,226 @@ function splitTextToSubtitleChunks(text, options = {}) {
   const mergedChunks = mergeTinyChunks(rawChunks, maxPhraseChars, minChunkChars);
 
   return enforceMaxLines(mergedChunks, maxCharsPerLine, maxLines);
+}
+
+function splitTextIntoSemanticBlocks(text, blockCount) {
+  const normalized = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
+  if (!normalized) return Array.from({ length: blockCount }, () => '');
+  if (blockCount <= 1) return [normalized];
+
+  let pieces = [];
+  const sentences = splitIntoSentences(normalized);
+
+  for (const sentence of sentences) {
+    const softParts = splitSentenceBySoftBreaks(sentence);
+    if (sentence.length > 90 && softParts.length > 1) {
+      pieces.push(...softParts);
+    } else {
+      pieces.push(sentence);
+    }
+  }
+
+  pieces = pieces
+    .map((p) => sanitizeAssText(p).replace(/\n+/g, ' ').trim())
+    .filter(Boolean);
+
+  if (!pieces.length) {
+    return Array.from({ length: blockCount }, (_, i) => (i === 0 ? normalized : ''));
+  }
+
+  if (pieces.length <= blockCount) {
+    const padded = [...pieces];
+    while (padded.length < blockCount) padded.push('');
+    return padded;
+  }
+
+  const result = [];
+  let index = 0;
+  let remainingWeight = pieces.reduce((sum, piece) => sum + piece.length, 0);
+
+  for (let blockIndex = 0; blockIndex < blockCount; blockIndex++) {
+    const remainingBlocks = blockCount - blockIndex;
+
+    if (remainingBlocks === 1) {
+      result.push(pieces.slice(index).join(' ').trim());
+      break;
+    }
+
+    const targetWeight = remainingWeight / remainingBlocks;
+    let currentParts = [];
+    let currentWeight = 0;
+
+    while (index < pieces.length) {
+      const piece = pieces[index];
+      const pieceWeight = piece.length;
+      const remainingPiecesAfterTake = pieces.length - (index + 1);
+
+      currentParts.push(piece);
+      currentWeight += pieceWeight;
+      index += 1;
+
+      const mustLeaveAtLeastOnePiecePerBlock = remainingPiecesAfterTake >= (remainingBlocks - 1);
+
+      if (currentWeight >= targetWeight && mustLeaveAtLeastOnePiecePerBlock) {
+        break;
+      }
+
+      if (!mustLeaveAtLeastOnePiecePerBlock) {
+        break;
+      }
+    }
+
+    const blockText = currentParts.join(' ').trim();
+    result.push(blockText);
+    remainingWeight -= currentWeight;
+  }
+
+  while (result.length < blockCount) {
+    result.push('');
+  }
+
+  if (result.length > blockCount) {
+    const head = result.slice(0, blockCount - 1);
+    const tail = result.slice(blockCount - 1).join(' ').trim();
+    return [...head, tail];
+  }
+
+  return result;
+}
+
+function allocateDurationsByWeights(texts, totalDuration, minBlockDuration = 0.8) {
+  if (!texts.length) return [];
+
+  let effectiveMin = minBlockDuration;
+  if ((texts.length * effectiveMin) > totalDuration) {
+    effectiveMin = Math.max(0.35, (totalDuration / texts.length) * 0.75);
+  }
+
+  const weights = texts.map((text) => Math.max(1, sanitizeAssText(text).length));
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+  const reservedMin = effectiveMin * texts.length;
+  const extraDuration = Math.max(0, totalDuration - reservedMin);
+
+  return texts.map((text, index) => {
+    const extra = totalWeight > 0 ? (weights[index] / totalWeight) * extraDuration : 0;
+    return effectiveMin + extra;
+  });
+}
+
+function buildScenePlan({
+  mediaItems,
+  voiceDuration,
+  subtitlesText,
+  subtitleStyle,
+  transitionDuration
+}) {
+  const allHaveNarration = mediaItems.every((item) => item.narrationText && item.narrationText.trim());
+
+  const blockTexts = allHaveNarration
+    ? mediaItems.map((item) => item.narrationText.trim())
+    : splitTextIntoSemanticBlocks(subtitlesText, mediaItems.length);
+
+  const visibleDurations = allocateDurationsByWeights(
+    blockTexts,
+    voiceDuration,
+    Number(subtitleStyle.minSceneDuration) || 0.8
+  );
+
+  let visibleStart = 0;
+
+  return mediaItems.map((item, index) => {
+    const visibleDuration = visibleDurations[index];
+    const inputDuration = index < mediaItems.length - 1
+      ? visibleDuration + transitionDuration
+      : visibleDuration;
+
+    const scene = {
+      ...item,
+      blockText: blockTexts[index] || '',
+      visibleStart,
+      visibleEnd: visibleStart + visibleDuration,
+      visibleDuration,
+      inputDuration
+    };
+
+    visibleStart += visibleDuration;
+    return scene;
+  });
+}
+
+function buildPhraseEventsForWindow({
+  text,
+  startTime,
+  duration,
+  subtitleStyle = {}
+}) {
+  const totalDuration = Math.max(0.1, Number(duration) || 0.1);
+  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
+  const maxLines = Number(subtitleStyle.maxLines) || 2;
+  const maxPhraseChars = Number(subtitleStyle.maxPhraseChars) || (maxCharsPerLine * maxLines);
+
+  const chunks = splitTextToSubtitleChunks(text, {
+    maxCharsPerLine,
+    maxLines,
+    maxPhraseChars,
+    minChunkChars: subtitleStyle.minChunkChars
+  });
+
+  if (!chunks.length) return [];
+
+  let minPhraseDuration = Number(subtitleStyle.minPhraseDuration) || 0.9;
+  if ((chunks.length * minPhraseDuration) > totalDuration) {
+    minPhraseDuration = Math.max(0.25, (totalDuration / chunks.length) * 0.75);
+  }
+
+  const weights = chunks.map((chunk) => Math.max(1, sanitizeAssText(chunk).length));
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+  const reservedMinDuration = minPhraseDuration * chunks.length;
+  const extraDuration = Math.max(0, totalDuration - reservedMinDuration);
+
+  const chunkDurations = chunks.map((chunk, index) => {
+    const extra = totalWeight > 0 ? (weights[index] / totalWeight) * extraDuration : 0;
+    return minPhraseDuration + extra;
+  });
+
+  const events = [];
+  let cursor = 0;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const localStart = cursor;
+    const localEnd = i === chunks.length - 1
+      ? totalDuration
+      : Math.min(totalDuration, cursor + chunkDurations[i]);
+
+    events.push({
+      start: startTime + localStart,
+      end: startTime + localEnd,
+      text: wrapAssText(chunks[i], maxCharsPerLine)
+    });
+
+    cursor = localEnd;
+  }
+
+  return events;
+}
+
+function buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle = {}) {
+  const events = [];
+
+  for (const scene of scenePlan) {
+    if (!scene.blockText) continue;
+
+    const sceneEvents = buildPhraseEventsForWindow({
+      text: scene.blockText,
+      startTime: scene.visibleStart,
+      duration: scene.visibleDuration,
+      subtitleStyle
+    });
+
+    events.push(...sceneEvents);
+  }
+
+  return events;
 }
 
 function buildTimedDialogueEvents({
@@ -996,107 +1000,6 @@ async function processJob(jobId) {
     }
 
     if (subtitlesText || scenePlan.some((scene) => scene.blockText)) {
-      const escapedSubtitlesPath = escapeFfmpegFilterPath(subtitlesPath);
-      const escapedFontsDir = escapeFfmpegFilterPath(fontsDir);
-      const subtitleVideoLabel = 'vsub';
-
-      filterParts.push(
-        `[${finalVideoLabel}]subtitles='${escapedSubtitlesPath}':fontsdir='${escapedFontsDir}'[${subtitleVideoLabel}]`
-      );
-
-      finalVideoLabel = subtitleVideoLabel;
-    }
-
-    if (musicUrl && musicPath && musicInputIndex !== null) {
-      filterParts.push(
-        `[${voiceInputIndex}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[voice]`
-      );
-      filterParts.push(
-        `[${musicInputIndex}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=${musicVolume}[music]`
-      );
-      filterParts.push(
-        `[voice][music]amix=inputs=2:duration=first:dropout_transition=2[a]`
-      );
-    }
-
-    ffmpegArgs.push(
-      '-filter_complex',
-      filterParts.join(';'),
-      '-map', `[${finalVideoLabel}]`
-    );
-
-    if (musicUrl && musicPath && musicInputIndex !== null) {
-      ffmpegArgs.push('-map', '[a]');
-    } else {
-      ffmpegArgs.push('-map', `${voiceInputIndex}:a`);
-    }
-
-    ffmpegArgs.push(
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',
-      '-pix_fmt', 'yuv420p',
-      '-r', '25',
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      '-movflags', '+faststart',
-      '-shortest',
-      outputPath
-    );
-
-    await runFfmpeg(ffmpegArgs);
-
-    job.status = 'done';
-    job.videoUrl = `${BASE_URL}/output/${jobId}.mp4`;
-    job.error = null;
-  } catch (error) {
-    job.status = 'fail';
-    job.error = error.message;
-    job.videoUrl = null;
-  }
-}
-
-    ffmpegArgs.push('-i', voicePath);
-
-    const voiceInputIndex = imagePaths.length;
-    let musicInputIndex = null;
-
-    if (musicUrl && musicPath) {
-      ffmpegArgs.push(
-        '-stream_loop', '-1',
-        '-i', musicPath
-      );
-      musicInputIndex = imagePaths.length + 1;
-    }
-
-    const filterParts = [];
-
-    for (let i = 0; i < imagePaths.length; i++) {
-      filterParts.push(
-        `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-        `crop=${width}:${height},setsar=1,fps=25,format=yuv420p[v${i}]`
-      );
-    }
-
-    let finalVideoLabel = 'v0';
-
-    if (imageCount > 1) {
-      let previousLabel = 'v0';
-
-      for (let i = 1; i < imageCount; i++) {
-        const offset = Number(((inputImageDuration - transitionDuration) * i).toFixed(3));
-        const xfadeLabel = `x${i}`;
-
-        filterParts.push(
-          `[${previousLabel}][v${i}]xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset}[${xfadeLabel}]`
-        );
-
-        previousLabel = xfadeLabel;
-      }
-
-      finalVideoLabel = previousLabel;
-    }
-
-    if (subtitlesText) {
       const escapedSubtitlesPath = escapeFfmpegFilterPath(subtitlesPath);
       const escapedFontsDir = escapeFfmpegFilterPath(fontsDir);
       const subtitleVideoLabel = 'vsub';
