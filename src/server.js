@@ -182,7 +182,8 @@ function normalizeMediaItems(payload = {}) {
       .map((item) => ({
         type: item.type || guessMediaTypeFromUrl(item.url),
         url: item.url,
-        narrationText: String(item.narrationText || '').trim()
+        narrationText: String(item.narrationText || '').trim(),
+        sceneRole: String(item.sceneRole || '').trim()
       }));
   }
 
@@ -190,7 +191,8 @@ function normalizeMediaItems(payload = {}) {
     return payload.images.map((url) => ({
       type: 'image',
       url,
-      narrationText: ''
+      narrationText: '',
+      sceneRole: ''
     }));
   }
 
@@ -679,6 +681,7 @@ function buildPhraseEventsForWindow({
     events.push({
       start: startTime + localStart,
       end: startTime + localEnd,
+      rawText: chunks[i],
       text: wrapAssText(chunks[i], maxCharsPerLine)
     });
 
@@ -756,6 +759,7 @@ function buildTimedDialogueEvents({
     events.push({
       start,
       end,
+      rawText: chunks[i],
       text: wrapAssText(chunks[i], maxCharsPerLine)
     });
 
@@ -763,6 +767,97 @@ function buildTimedDialogueEvents({
   }
 
   return events;
+}
+
+function tokenizeWords(text = '') {
+  return sanitizeAssText(text)
+    .replace(/\n+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word, index) => ({
+      index,
+      text: word
+    }));
+}
+
+function wrapWordTokens(tokens, maxCharsPerLine = 28) {
+  const lines = [];
+  let current = [];
+  let currentLen = 0;
+
+  for (const token of tokens) {
+    const tokenLen = token.text.length;
+    const nextLen = current.length ? currentLen + 1 + tokenLen : tokenLen;
+
+    if (current.length && nextLen > maxCharsPerLine) {
+      lines.push(current);
+      current = [token];
+      currentLen = tokenLen;
+    } else {
+      current.push(token);
+      currentLen = nextLen;
+    }
+  }
+
+  if (current.length) {
+    lines.push(current);
+  }
+
+  return lines;
+}
+
+function buildHighlightedPhraseText(tokens, activeIndex, maxCharsPerLine = 28) {
+  const lines = wrapWordTokens(tokens, maxCharsPerLine);
+
+  return lines
+    .map((line) =>
+      line
+        .map((token) => {
+          if (token.index === activeIndex) {
+            return `{\\rActiveWord}${token.text}{\\rDefault}`;
+          }
+          return token.text;
+        })
+        .join(' ')
+    )
+    .join('\\N');
+}
+
+function buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle = {}) {
+  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
+  const result = [];
+
+  for (const phraseEvent of phraseEvents) {
+    const tokens = tokenizeWords(phraseEvent.rawText || '');
+    if (!tokens.length) continue;
+
+    const totalDuration = Math.max(0.1, Number(phraseEvent.end) - Number(phraseEvent.start));
+    const weights = tokens.map((token) => {
+      const clean = token.text.replace(/[^\p{L}\p{N}]+/gu, '');
+      return Math.max(1, clean.length);
+    });
+
+    const totalWeight = weights.reduce((sum, value) => sum + value, 0) || 1;
+    let cursor = Number(phraseEvent.start);
+
+    for (let i = 0; i < tokens.length; i++) {
+      const isLast = i === tokens.length - 1;
+      const wordDuration = isLast
+        ? Math.max(0.05, Number(phraseEvent.end) - cursor)
+        : totalDuration * (weights[i] / totalWeight);
+
+      result.push({
+        start: cursor,
+        end: isLast ? Number(phraseEvent.end) : cursor + wordDuration,
+        text: buildHighlightedPhraseText(tokens, i, maxCharsPerLine)
+      });
+
+      cursor += wordDuration;
+    }
+  }
+
+  return result;
 }
 
 function escapeFfmpegFilterPath(filePath) {
@@ -780,7 +875,7 @@ function buildAssContent({
   subtitleStyle = {},
   scenePlan = []
 }) {
-  const fontName = subtitleStyle.fontName || 'Arial';
+  const fontName = subtitleStyle.fontName || 'Inter';
   const fontSize = Number(subtitleStyle.fontSize || Math.max(24, Math.round(height * 0.026)));
   const marginV = Number(subtitleStyle.marginV || Math.round(height * 0.11));
   const outline = Number(subtitleStyle.outline || 2);
@@ -794,13 +889,21 @@ function buildAssContent({
   const outlineColour = assColorFromHex(subtitleStyle.outlineColor || '#000000', '&H00000000');
   const backColour = assColorFromHex(subtitleStyle.backColor || '#000000', '&H00000000');
 
-  const events = scenePlan.length > 0
+  const activeWordTextColour = assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF');
+  const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#7F41E0', '&H00E0417F');
+  const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
+
+  const phraseEvents = scenePlan.length > 0
     ? buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle)
     : buildTimedDialogueEvents({
         subtitlesText,
         duration,
         subtitleStyle
       });
+
+  const events = subtitleMode === 'word-highlight'
+    ? buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle)
+    : phraseEvents;
 
   return `[Script Info]
 ScriptType: v4.00+
@@ -812,6 +915,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
+Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,1,0,${alignment},${marginL},${marginR},${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -970,7 +1074,7 @@ async function processJob(jobId) {
         }
 
         videoFilters.push(`trim=duration=${Number(scene.inputDuration.toFixed(3))}`);
-        videoFilters.push(`setpts=PTS-STARTPTS`);
+        videoFilters.push('setpts=PTS-STARTPTS');
 
         filterParts.push(
           `[${i}:v]${videoFilters.join(',')}[v${i}]`
