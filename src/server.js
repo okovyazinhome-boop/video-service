@@ -159,6 +159,260 @@ function getAllowedTransition(transitionType) {
   return allowedTransitions.includes(transitionType) ? transitionType : 'fade';
 }
 
+function guessMediaTypeFromUrl(fileUrl = '') {
+  const ext = path.extname(new URL(fileUrl).pathname).toLowerCase();
+
+  const videoExts = ['.mp4', '.mov', '.m4v', '.webm', '.mkv'];
+  const imageExts = ['.jpg', '.jpeg', '.png', '.webp'];
+
+  if (videoExts.includes(ext)) return 'video';
+  if (imageExts.includes(ext)) return 'image';
+
+  return 'image';
+}
+
+function normalizeMediaItems(payload = {}) {
+  if (Array.isArray(payload.media) && payload.media.length > 0) {
+    return payload.media
+      .filter((item) => item && item.url)
+      .map((item) => ({
+        type: item.type || guessMediaTypeFromUrl(item.url),
+        url: item.url,
+        narrationText: String(item.narrationText || '').trim()
+      }));
+  }
+
+  if (Array.isArray(payload.images) && payload.images.length > 0) {
+    return payload.images.map((url) => ({
+      type: 'image',
+      url,
+      narrationText: ''
+    }));
+  }
+
+  return [];
+}
+
+function splitTextIntoSemanticBlocks(text, blockCount) {
+  const normalized = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
+  if (!normalized) return Array.from({ length: blockCount }, () => '');
+  if (blockCount <= 1) return [normalized];
+
+  let pieces = [];
+  const sentences = splitIntoSentences(normalized);
+
+  for (const sentence of sentences) {
+    const softParts = splitSentenceBySoftBreaks(sentence);
+    if (sentence.length > 90 && softParts.length > 1) {
+      pieces.push(...softParts);
+    } else {
+      pieces.push(sentence);
+    }
+  }
+
+  pieces = pieces
+    .map((p) => sanitizeAssText(p).replace(/\n+/g, ' ').trim())
+    .filter(Boolean);
+
+  if (!pieces.length) {
+    return Array.from({ length: blockCount }, (_, i) => (i === 0 ? normalized : ''));
+  }
+
+  if (pieces.length <= blockCount) {
+    const padded = [...pieces];
+    while (padded.length < blockCount) padded.push('');
+    return padded;
+  }
+
+  const result = [];
+  let index = 0;
+  let remainingWeight = pieces.reduce((sum, piece) => sum + piece.length, 0);
+
+  for (let blockIndex = 0; blockIndex < blockCount; blockIndex++) {
+    const remainingBlocks = blockCount - blockIndex;
+
+    if (remainingBlocks === 1) {
+      result.push(pieces.slice(index).join(' ').trim());
+      break;
+    }
+
+    const targetWeight = remainingWeight / remainingBlocks;
+    let currentParts = [];
+    let currentWeight = 0;
+
+    while (index < pieces.length) {
+      const piece = pieces[index];
+      const pieceWeight = piece.length;
+      const remainingPiecesAfterTake = pieces.length - (index + 1);
+
+      currentParts.push(piece);
+      currentWeight += pieceWeight;
+      index += 1;
+
+      const mustLeaveAtLeastOnePiecePerBlock = remainingPiecesAfterTake >= (remainingBlocks - 1);
+
+      if (currentWeight >= targetWeight && mustLeaveAtLeastOnePiecePerBlock) {
+        break;
+      }
+
+      if (!mustLeaveAtLeastOnePiecePerBlock) {
+        break;
+      }
+    }
+
+    const blockText = currentParts.join(' ').trim();
+    result.push(blockText);
+    remainingWeight -= currentWeight;
+  }
+
+  while (result.length < blockCount) {
+    result.push('');
+  }
+
+  if (result.length > blockCount) {
+    const head = result.slice(0, blockCount - 1);
+    const tail = result.slice(blockCount - 1).join(' ').trim();
+    return [...head, tail];
+  }
+
+  return result;
+}
+
+function allocateDurationsByWeights(texts, totalDuration, minBlockDuration = 0.8) {
+  if (!texts.length) return [];
+
+  let effectiveMin = minBlockDuration;
+  if ((texts.length * effectiveMin) > totalDuration) {
+    effectiveMin = Math.max(0.35, (totalDuration / texts.length) * 0.75);
+  }
+
+  const weights = texts.map((text) => Math.max(1, sanitizeAssText(text).length));
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+  const reservedMin = effectiveMin * texts.length;
+  const extraDuration = Math.max(0, totalDuration - reservedMin);
+
+  return texts.map((text, index) => {
+    const extra = totalWeight > 0 ? (weights[index] / totalWeight) * extraDuration : 0;
+    return effectiveMin + extra;
+  });
+}
+
+function buildScenePlan({
+  mediaItems,
+  voiceDuration,
+  subtitlesText,
+  subtitleStyle,
+  transitionDuration
+}) {
+  const allHaveNarration = mediaItems.every((item) => item.narrationText && item.narrationText.trim());
+
+  const blockTexts = allHaveNarration
+    ? mediaItems.map((item) => item.narrationText.trim())
+    : splitTextIntoSemanticBlocks(subtitlesText, mediaItems.length);
+
+  const visibleDurations = allocateDurationsByWeights(
+    blockTexts,
+    voiceDuration,
+    Number(subtitleStyle.minSceneDuration) || 0.8
+  );
+
+  let visibleStart = 0;
+
+  return mediaItems.map((item, index) => {
+    const visibleDuration = visibleDurations[index];
+    const inputDuration = index < mediaItems.length - 1
+      ? visibleDuration + transitionDuration
+      : visibleDuration;
+
+    const scene = {
+      ...item,
+      blockText: blockTexts[index] || '',
+      visibleStart,
+      visibleEnd: visibleStart + visibleDuration,
+      visibleDuration,
+      inputDuration
+    };
+
+    visibleStart += visibleDuration;
+    return scene;
+  });
+}
+
+function buildPhraseEventsForWindow({
+  text,
+  startTime,
+  duration,
+  subtitleStyle = {}
+}) {
+  const totalDuration = Math.max(0.1, Number(duration) || 0.1);
+  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
+  const maxLines = Number(subtitleStyle.maxLines) || 2;
+  const maxPhraseChars = Number(subtitleStyle.maxPhraseChars) || (maxCharsPerLine * maxLines);
+
+  const chunks = splitTextToSubtitleChunks(text, {
+    maxCharsPerLine,
+    maxLines,
+    maxPhraseChars,
+    minChunkChars: subtitleStyle.minChunkChars
+  });
+
+  if (!chunks.length) return [];
+
+  let minPhraseDuration = Number(subtitleStyle.minPhraseDuration) || 0.9;
+  if ((chunks.length * minPhraseDuration) > totalDuration) {
+    minPhraseDuration = Math.max(0.25, (totalDuration / chunks.length) * 0.75);
+  }
+
+  const weights = chunks.map((chunk) => Math.max(1, sanitizeAssText(chunk).length));
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+  const reservedMinDuration = minPhraseDuration * chunks.length;
+  const extraDuration = Math.max(0, totalDuration - reservedMinDuration);
+
+  const chunkDurations = chunks.map((chunk, index) => {
+    const extra = totalWeight > 0 ? (weights[index] / totalWeight) * extraDuration : 0;
+    return minPhraseDuration + extra;
+  });
+
+  const events = [];
+  let cursor = 0;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const localStart = cursor;
+    const localEnd = i === chunks.length - 1
+      ? totalDuration
+      : Math.min(totalDuration, cursor + chunkDurations[i]);
+
+    events.push({
+      start: startTime + localStart,
+      end: startTime + localEnd,
+      text: wrapAssText(chunks[i], maxCharsPerLine)
+    });
+
+    cursor = localEnd;
+  }
+
+  return events;
+}
+
+function buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle = {}) {
+  const events = [];
+
+  for (const scene of scenePlan) {
+    if (!scene.blockText) continue;
+
+    const sceneEvents = buildPhraseEventsForWindow({
+      text: scene.blockText,
+      startTime: scene.visibleStart,
+      duration: scene.visibleDuration,
+      subtitleStyle
+    });
+
+    events.push(...sceneEvents);
+  }
+
+  return events;
+}
+
 function formatAssTime(seconds) {
   const totalCs = Math.max(0, Math.round(Number(seconds || 0) * 100));
   const hours = Math.floor(totalCs / 360000);
@@ -519,7 +773,8 @@ function buildAssContent({
   height,
   duration,
   subtitlesText,
-  subtitleStyle = {}
+  subtitleStyle = {},
+  scenePlan = []
 }) {
   const fontName = subtitleStyle.fontName || 'Arial';
   const fontSize = Number(subtitleStyle.fontSize || Math.max(24, Math.round(height * 0.026)));
@@ -535,11 +790,13 @@ function buildAssContent({
   const outlineColour = assColorFromHex(subtitleStyle.outlineColor || '#000000', '&H00000000');
   const backColour = assColorFromHex(subtitleStyle.backColor || '#000000', '&H00000000');
 
-  const events = buildTimedDialogueEvents({
-    subtitlesText,
-    duration,
-    subtitleStyle
-  });
+  const events = scenePlan.length > 0
+    ? buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle)
+    : buildTimedDialogueEvents({
+        subtitlesText,
+        duration,
+        subtitleStyle
+      });
 
   return `[Script Info]
 ScriptType: v4.00+
@@ -568,7 +825,7 @@ async function processJob(jobId) {
     const jobDir = path.join(process.cwd(), 'storage', 'jobs', jobId);
     await fs.ensureDir(jobDir);
 
-    const imageUrls = job.payload.images || [];
+    const mediaItems = normalizeMediaItems(job.payload);
     const voiceUrl = job.payload.voiceMp3;
     const musicUrl = job.payload.musicMp3;
     const musicVolume = Number(job.payload.musicVolume ?? 0.15);
@@ -576,6 +833,10 @@ async function processJob(jobId) {
     const { width, height } = parseResolution(job.payload.resolution);
     const subtitlesText = String(job.payload.subtitlesText || '').trim();
     const subtitleStyle = job.payload.subtitleStyle || {};
+
+    if (!mediaItems.length) {
+      throw new Error('media must be a non-empty array');
+    }
 
     const voicePath = path.join(jobDir, `voice${getExtFromUrl(voiceUrl, '.mp3')}`);
     const musicPath = musicUrl
@@ -585,12 +846,29 @@ async function processJob(jobId) {
     const outputPath = path.join(process.cwd(), 'storage', 'output', `${jobId}.mp4`);
     const fontsDir = path.join(process.cwd(), 'storage', 'fonts');
 
-    const imagePaths = [];
-    for (let i = 0; i < imageUrls.length; i++) {
-      const imageUrl = imageUrls[i];
-      const imagePath = path.join(jobDir, `image_${i + 1}${getExtFromUrl(imageUrl, '.jpg')}`);
-      await downloadToFile(imageUrl, imagePath);
-      imagePaths.push(imagePath);
+    const preparedMedia = [];
+
+    for (let i = 0; i < mediaItems.length; i++) {
+      const item = mediaItems[i];
+      const type = item.type === 'video' ? 'video' : 'image';
+      const localPath = path.join(
+        jobDir,
+        `media_${i + 1}${getExtFromUrl(item.url, type === 'video' ? '.mp4' : '.jpg')}`
+      );
+
+      await downloadToFile(item.url, localPath);
+
+      let sourceDuration = null;
+      if (type === 'video') {
+        sourceDuration = await getMediaDuration(localPath);
+      }
+
+      preparedMedia.push({
+        ...item,
+        type,
+        localPath,
+        sourceDuration
+      });
     }
 
     await downloadToFile(voiceUrl, voicePath);
@@ -605,33 +883,31 @@ async function processJob(jobId) {
       throw new Error('Invalid voice duration');
     }
 
-    const imageCount = imagePaths.length;
-
     let transitionDuration = 0;
-    if (imageCount > 1) {
-      const safeTransition = Math.min(0.5, Math.max(0.15, (voiceDuration / imageCount) * 0.6));
+    if (preparedMedia.length > 1) {
+      const safeTransition = Math.min(
+        0.5,
+        Math.max(0.15, (voiceDuration / preparedMedia.length) * 0.35)
+      );
       transitionDuration = Number(safeTransition.toFixed(3));
     }
 
-    const inputImageDuration = imageCount === 1
-      ? Number(voiceDuration.toFixed(3))
-      : Number(((voiceDuration + ((imageCount - 1) * transitionDuration)) / imageCount).toFixed(3));
+    const scenePlan = buildScenePlan({
+      mediaItems: preparedMedia,
+      voiceDuration,
+      subtitlesText,
+      subtitleStyle,
+      transitionDuration
+    });
 
-    if (!Number.isFinite(inputImageDuration) || inputImageDuration <= 0) {
-      throw new Error('Invalid per-image duration');
-    }
-
-    if (imageCount > 1 && inputImageDuration <= transitionDuration) {
-      throw new Error('Transition duration is too large for current voice duration');
-    }
-
-    if (subtitlesText) {
+    if (subtitlesText || scenePlan.some((scene) => scene.blockText)) {
       const assContent = buildAssContent({
         width,
         height,
         duration: voiceDuration,
         subtitlesText,
-        subtitleStyle
+        subtitleStyle,
+        scenePlan
       });
 
       await fs.writeFile(subtitlesPath, assContent, 'utf8');
@@ -639,13 +915,145 @@ async function processJob(jobId) {
 
     const ffmpegArgs = ['-y'];
 
-    for (let i = 0; i < imagePaths.length; i++) {
+    for (const scene of scenePlan) {
+      if (scene.type === 'image') {
+        ffmpegArgs.push(
+          '-loop', '1',
+          '-t', String(Number(scene.inputDuration.toFixed(3))),
+          '-i', scene.localPath
+        );
+      } else {
+        ffmpegArgs.push('-i', scene.localPath);
+      }
+    }
+
+    ffmpegArgs.push('-i', voicePath);
+
+    const voiceInputIndex = scenePlan.length;
+    let musicInputIndex = null;
+
+    if (musicUrl && musicPath) {
       ffmpegArgs.push(
-        '-loop', '1',
-        '-t', String(inputImageDuration),
-        '-i', imagePaths[i]
+        '-stream_loop', '-1',
+        '-i', musicPath
+      );
+      musicInputIndex = scenePlan.length + 1;
+    }
+
+    const filterParts = [];
+
+    for (let i = 0; i < scenePlan.length; i++) {
+      const scene = scenePlan[i];
+
+      if (scene.type === 'image') {
+        filterParts.push(
+          `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
+          `crop=${width}:${height},setsar=1,fps=25,format=yuv420p,` +
+          `trim=duration=${Number(scene.inputDuration.toFixed(3))},setpts=PTS-STARTPTS[v${i}]`
+        );
+      } else {
+        const padDuration = Math.max(0, Number(scene.inputDuration) - Number(scene.sourceDuration || 0));
+        const videoFilters = [
+          `scale=${width}:${height}:force_original_aspect_ratio=increase`,
+          `crop=${width}:${height}`,
+          `setsar=1`,
+          `fps=25`,
+          `format=yuv420p`
+        ];
+
+        if (padDuration > 0.02) {
+          videoFilters.push(`tpad=stop_mode=clone:stop_duration=${Number(padDuration.toFixed(3))}`);
+        }
+
+        videoFilters.push(`trim=duration=${Number(scene.inputDuration.toFixed(3))}`);
+        videoFilters.push(`setpts=PTS-STARTPTS`);
+
+        filterParts.push(
+          `[${i}:v]${videoFilters.join(',')}[v${i}]`
+        );
+      }
+    }
+
+    let finalVideoLabel = 'v0';
+
+    if (scenePlan.length > 1) {
+      let previousLabel = 'v0';
+      let cumulativeVisible = scenePlan[0].visibleDuration;
+
+      for (let i = 1; i < scenePlan.length; i++) {
+        const xfadeLabel = `x${i}`;
+        const offset = Number(cumulativeVisible.toFixed(3));
+
+        filterParts.push(
+          `[${previousLabel}][v${i}]xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset}[${xfadeLabel}]`
+        );
+
+        previousLabel = xfadeLabel;
+        cumulativeVisible += scenePlan[i].visibleDuration;
+      }
+
+      finalVideoLabel = previousLabel;
+    }
+
+    if (subtitlesText || scenePlan.some((scene) => scene.blockText)) {
+      const escapedSubtitlesPath = escapeFfmpegFilterPath(subtitlesPath);
+      const escapedFontsDir = escapeFfmpegFilterPath(fontsDir);
+      const subtitleVideoLabel = 'vsub';
+
+      filterParts.push(
+        `[${finalVideoLabel}]subtitles='${escapedSubtitlesPath}':fontsdir='${escapedFontsDir}'[${subtitleVideoLabel}]`
+      );
+
+      finalVideoLabel = subtitleVideoLabel;
+    }
+
+    if (musicUrl && musicPath && musicInputIndex !== null) {
+      filterParts.push(
+        `[${voiceInputIndex}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[voice]`
+      );
+      filterParts.push(
+        `[${musicInputIndex}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=${musicVolume}[music]`
+      );
+      filterParts.push(
+        `[voice][music]amix=inputs=2:duration=first:dropout_transition=2[a]`
       );
     }
+
+    ffmpegArgs.push(
+      '-filter_complex',
+      filterParts.join(';'),
+      '-map', `[${finalVideoLabel}]`
+    );
+
+    if (musicUrl && musicPath && musicInputIndex !== null) {
+      ffmpegArgs.push('-map', '[a]');
+    } else {
+      ffmpegArgs.push('-map', `${voiceInputIndex}:a`);
+    }
+
+    ffmpegArgs.push(
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-pix_fmt', 'yuv420p',
+      '-r', '25',
+      '-c:a', 'aac',
+      '-b:a', '192k',
+      '-movflags', '+faststart',
+      '-shortest',
+      outputPath
+    );
+
+    await runFfmpeg(ffmpegArgs);
+
+    job.status = 'done';
+    job.videoUrl = `${BASE_URL}/output/${jobId}.mp4`;
+    job.error = null;
+  } catch (error) {
+    job.status = 'fail';
+    job.error = error.message;
+    job.videoUrl = null;
+  }
+}
 
     ffmpegArgs.push('-i', voicePath);
 
@@ -765,6 +1173,7 @@ app.get('/health', (req, res) => {
 
 app.post('/render', authMiddleware, (req, res) => {
   const {
+    media = [],
     images = [],
     voiceMp3 = '',
     musicMp3 = '',
@@ -776,10 +1185,12 @@ app.post('/render', authMiddleware, (req, res) => {
     logoUrl = ''
   } = req.body || {};
 
-  if (!Array.isArray(images) || images.length === 0) {
+  const normalizedMedia = normalizeMediaItems({ media, images });
+
+  if (!normalizedMedia.length) {
     return res.status(400).json({
       ok: false,
-      error: 'images must be a non-empty array'
+      error: 'media must be a non-empty array'
     });
   }
 
@@ -797,6 +1208,7 @@ app.post('/render', authMiddleware, (req, res) => {
     status: 'queued',
     createdAt: new Date().toISOString(),
     payload: {
+      media: normalizedMedia,
       images,
       voiceMp3,
       musicMp3,
