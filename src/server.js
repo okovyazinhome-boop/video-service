@@ -1199,8 +1199,19 @@ function buildAssContent({
   const shadow = Number(subtitleStyle.shadow || 0);
   const bold = subtitleStyle.bold === false ? 0 : 1;
   const alignment = Number(subtitleStyle.alignment || 2);
-  const marginL = Number(subtitleStyle.marginL || 60);
-  const marginR = Number(subtitleStyle.marginR || 60);
+
+  // Отступы слева/справа — минимум 5% ширины видео, чтобы текст не вылезал за края
+  // При большом шрифте автоматически увеличиваются
+  const autoMargin = Math.max(60, Math.round(width * 0.05));
+  const marginL = Number(subtitleStyle.marginL || autoMargin);
+  const marginR = Number(subtitleStyle.marginR || autoMargin);
+
+  // maxCharsPerLine: считаем от ширины видео и размера шрифта
+  // ~1.8 символа на каждые 10px шрифта на 1080px ширины
+  const usableWidth = width - marginL - marginR;
+  const charsPerPixel = 1 / (fontSize * 0.55); // приблизительная ширина символа
+  const autoMaxChars = Math.floor(usableWidth * charsPerPixel);
+  const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine || Math.max(10, Math.min(40, autoMaxChars)));
 
   const primaryColour = assColorFromHex(subtitleStyle.primaryColor || '#FFFFFF', '&H00FFFFFF');
   const outlineColour = assColorFromHex(subtitleStyle.outlineColor || '#000000', '&H00000000');
@@ -1209,6 +1220,11 @@ function buildAssContent({
   const activeWordTextColour = assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF');
   const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B');
   const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
+
+  // Пробрасываем вычисленный maxCharsPerLine в subtitleStyle если не задан вручную
+  if (!subtitleStyle.maxCharsPerLine) {
+    subtitleStyle = { ...subtitleStyle, maxCharsPerLine };
+  }
 
   const subtitleAnimation = String(subtitleStyle.animation || 'none').trim().toLowerCase();
   let animTag = '';
@@ -1245,6 +1261,9 @@ function buildAssContent({
       )
     : phraseEvents;
 
+  // Padding активного блока — пропорционально шрифту, создаёт визуальный эффект скругления
+  const activeBoxPad = Math.round(fontSize * 0.22);
+
   return `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${width}
@@ -1255,7 +1274,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
-Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,1,0,${alignment},${marginL},${marginR},${marginV},1
+Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,${activeBoxPad},0,${alignment},${marginL},${marginR},${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

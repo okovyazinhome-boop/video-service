@@ -19,18 +19,18 @@ COPY . .
 RUN mkdir -p storage/jobs storage/temp storage/output storage/fonts
 
 # ── Установка шрифтов ──────────────────────────────────────────────────────────
-# Inter
+# Inter (extras/ttf/ внутри zip)
 RUN curl -sL "https://github.com/rsms/inter/releases/download/v4.0/Inter-4.0.zip" -o /tmp/inter.zip \
     && unzip -q /tmp/inter.zip -d /tmp/inter \
-    && cp /tmp/inter/InterTTF/Inter-Regular.ttf storage/fonts/Inter.ttf \
-    && cp /tmp/inter/InterTTF/Inter-Bold.ttf    storage/fonts/Inter-Bold.ttf \
+    && find /tmp/inter -name "Inter-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Inter.ttf \
+    && find /tmp/inter -name "Inter-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Inter-Bold.ttf \
     && rm -rf /tmp/inter.zip /tmp/inter
 
 # Roboto
 RUN curl -sL "https://fonts.google.com/download?family=Roboto" -o /tmp/roboto.zip \
     && unzip -q /tmp/roboto.zip -d /tmp/roboto \
-    && cp /tmp/roboto/Roboto-Regular.ttf storage/fonts/Roboto.ttf \
-    && cp /tmp/roboto/Roboto-Bold.ttf    storage/fonts/Roboto-Bold.ttf \
+    && find /tmp/roboto -name "Roboto-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Roboto.ttf \
+    && find /tmp/roboto -name "Roboto-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Roboto-Bold.ttf \
     && rm -rf /tmp/roboto.zip /tmp/roboto
 
 # Montserrat
