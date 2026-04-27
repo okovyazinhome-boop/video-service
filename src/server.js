@@ -219,17 +219,25 @@ function normalizeMediaItems(payload = {}) {
         type: item.type || guessMediaTypeFromUrl(item.url),
         url: item.url,
         narrationText: String(item.narrationText || '').trim(),
-        sceneRole: String(item.sceneRole || '').trim()
+        sceneRole: String(item.sceneRole || '').trim(),
+        overlayText: String(item.overlayText || '').trim()
       }));
   }
 
   if (Array.isArray(payload.images) && payload.images.length > 0) {
-    return payload.images.map((url) => ({
-      type: 'image',
-      url,
-      narrationText: '',
-      sceneRole: ''
-    }));
+    // images может быть массивом строк (URL) или объектов {url, overlayText}
+    return payload.images.map((item) => {
+      if (typeof item === 'string') {
+        return { type: 'image', url: item, narrationText: '', sceneRole: '', overlayText: '' };
+      }
+      return {
+        type: item.type || 'image',
+        url: item.url || item,
+        narrationText: String(item.narrationText || '').trim(),
+        sceneRole: String(item.sceneRole || '').trim(),
+        overlayText: String(item.overlayText || '').trim()
+      };
+    });
   }
 
   return [];
@@ -1083,6 +1091,62 @@ function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetNa
     `setsar=1,format=yuv420p,trim=duration=${duration},setpts=PTS-STARTPTS[v${sceneIndex}]`;
 }
 
+/**
+ * Строит FFmpeg drawtext-фильтр для наложения текстовой надписи поверх сцены.
+ * inputLabel  — входной лейбл видеопотока (например 'v0')
+ * outputLabel — выходной лейбл (например 'vt0')
+ */
+function buildSceneDrawtextFilter(text, inputLabel, outputLabel, overlayStyle, width, height, fontsDir) {
+  const fontName   = String(overlayStyle.fontName   || 'Inter');
+  const fontSize   = Number(overlayStyle.fontSize   || Math.round(height * 0.045));
+  const fontColor  = String(overlayStyle.fontColor  || '#FFFFFF');
+  const bold       = overlayStyle.bold === false ? 0 : 1;
+  const position   = String(overlayStyle.position   || 'top').toLowerCase(); // top | center | bottom
+  const bgColor    = String(overlayStyle.bgColor     || 'black@0.0'); // фон под текстом, по умолчанию прозрачный
+  const outline    = Number(overlayStyle.outline     ?? 2);
+  const marginV    = Number(overlayStyle.marginV     || Math.round(height * 0.04));
+
+  // Позиция по вертикали
+  let yExpr;
+  if (position === 'center') {
+    yExpr = `(h-text_h)/2`;
+  } else if (position === 'bottom') {
+    yExpr = `h-text_h-${marginV}`;
+  } else {
+    // top — по умолчанию
+    yExpr = `${marginV}`;
+  }
+
+  // Экранирование текста для FFmpeg drawtext
+  const safeText = text
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "’")   // апостроф → типографский, безопасен в фильтре
+    .replace(/:/g, '\\:')
+    .replace(/\n/g, ' ');
+
+  // Путь к шрифту (ищем в fontsDir)
+  const escapedFontsDir = fontsDir.replace(/\\/g, '/').replace(/'/g, "\\'").replace(/:/g, '\\:');
+  const fontfile = `${escapedFontsDir}/${fontName}.ttf`;
+
+  const drawtextArgs = [
+    `text='${safeText}'`,
+    `fontfile='${fontfile}'`,
+    `fontsize=${fontSize}`,
+    `fontcolor=${fontColor}`,
+    `bold=${bold}`,
+    `borderw=${outline}`,
+    `bordercolor=black@0.8`,
+    `box=1`,
+    `boxcolor=${bgColor}`,
+    `boxborderw=8`,
+    `x=(w-text_w)/2`,
+    `y=${yExpr}`,
+    `line_spacing=4`
+  ].join(':');
+
+  return `[${inputLabel}]drawtext=${drawtextArgs}[${outputLabel}]`;
+}
+
 function buildAssContent({
   width,
   height,
@@ -1181,6 +1245,7 @@ async function _processJobInner(jobId) {
     const { width, height } = parseResolution(job.payload.resolution);
     const subtitlesText = String(job.payload.subtitlesText || '').trim();
     const subtitleStyle = job.payload.subtitleStyle || {};
+    const overlayStyle = job.payload.overlayStyle || {};
     const wordTimings = Array.isArray(job.payload.wordTimings) ? job.payload.wordTimings : [];
 
     if (!mediaItems.length) {
@@ -1320,12 +1385,25 @@ async function _processJobInner(jobId) {
           `[${i}:v]${videoFilters.join(',')}[v${i}]`
         );
       }
+
+      // Наложение текстовой надписи поверх сцены (если задана)
+      const sceneOverlayText = String(scene.overlayText || '').trim();
+      if (sceneOverlayText) {
+        const dtLabel = `vdt${i}`;
+        filterParts.push(
+          buildSceneDrawtextFilter(sceneOverlayText, `v${i}`, dtLabel, overlayStyle, width, height, fontsDir)
+        );
+        // Переименовываем лейбл сцены так, чтобы xfade использовал уже с надписью
+        filterParts.push(`[${dtLabel}]null[v${i}r]`);
+      } else {
+        filterParts.push(`[v${i}]null[v${i}r]`);
+      }
     }
 
-    let finalVideoLabel = 'v0';
+    let finalVideoLabel = 'v0r';
 
     if (scenePlan.length > 1) {
-      let previousLabel = 'v0';
+      let previousLabel = 'v0r';
       let cumulativeVisible = scenePlan[0].visibleDuration;
 
       for (let i = 1; i < scenePlan.length; i++) {
@@ -1333,7 +1411,7 @@ async function _processJobInner(jobId) {
         const offset = Number(cumulativeVisible.toFixed(3));
 
         filterParts.push(
-          `[${previousLabel}][v${i}]xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset}[${xfadeLabel}]`
+          `[${previousLabel}][v${i}r]xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset}[${xfadeLabel}]`
         );
 
         previousLabel = xfadeLabel;
@@ -1443,6 +1521,7 @@ app.post('/render', authMiddleware, (req, res) => {
     transitionType = 'fade',
     resolution = '1080x1920',
     subtitleStyle = {},
+    overlayStyle = {},
     logoUrl = '',
     wordTimings = [],
     webhookUrl = ''
@@ -1480,6 +1559,7 @@ app.post('/render', authMiddleware, (req, res) => {
       transitionType,
       resolution,
       subtitleStyle,
+      overlayStyle,
       logoUrl,
       wordTimings,
       webhookUrl: String(webhookUrl || '').trim()
