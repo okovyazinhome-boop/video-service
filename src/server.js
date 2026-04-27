@@ -16,6 +16,37 @@ const BASE_URL = process.env.BASE_URL || 'https://video.uraltrackpro.ru';
 
 const jobs = new Map();
 
+const MAX_CONCURRENT_JOBS = Number(process.env.MAX_CONCURRENT_JOBS) || 2;
+const JOB_TTL_MS = Number(process.env.JOB_TTL_HOURS || 24) * 60 * 60 * 1000;
+let activeJobs = 0;
+
+// Автоочистка завершённых задач и файлов
+setInterval(async () => {
+  const now = Date.now();
+  for (const [jobId, job] of jobs.entries()) {
+    if (['done', 'fail'].includes(job.status) &&
+        (now - new Date(job.createdAt).getTime()) > JOB_TTL_MS) {
+      await fs.remove(path.join('storage', 'jobs', jobId)).catch(() => {});
+      await fs.remove(path.join('storage', 'output', `${jobId}.mp4`)).catch(() => {});
+      jobs.delete(jobId);
+    }
+  }
+}, 60 * 60 * 1000);
+
+async function sendWebhook(job) {
+  if (!job.payload.webhookUrl) return;
+  try {
+    await axios.post(job.payload.webhookUrl, {
+      jobId: job.jobId,
+      status: job.status,
+      videoUrl: job.videoUrl || null,
+      error: job.error || null
+    }, { timeout: 10000 });
+  } catch (e) {
+    console.error(`Webhook failed for job ${job.jobId}:`, e.message);
+  }
+}
+
 app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -147,16 +178,21 @@ async function getMediaDuration(filePath) {
   return duration;
 }
 
-function getAllowedTransition(transitionType) {
-  const allowedTransitions = [
-    'fade',
-    'smoothleft',
-    'smoothright',
-    'slideleft',
-    'slideright'
-  ];
+const ALLOWED_TRANSITIONS = [
+  'fade', 'smoothleft', 'smoothright', 'slideleft', 'slideright',
+  'zoomin', 'fadeblack', 'fadewhite', 'dissolve', 'pixelize',
+  'circleopen', 'circleclose', 'radial',
+  'coverleft', 'coverright', 'coverup', 'coverdown',
+  'revealleft', 'revealright',
+  'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+  'squeezeh', 'squeezev'
+];
 
-  return allowedTransitions.includes(transitionType) ? transitionType : 'fade';
+function getAllowedTransition(transitionType) {
+  if (transitionType === 'random') {
+    return ALLOWED_TRANSITIONS[Math.floor(Math.random() * ALLOWED_TRANSITIONS.length)];
+  }
+  return ALLOWED_TRANSITIONS.includes(transitionType) ? transitionType : 'fade';
 }
 
 function guessMediaTypeFromUrl(fileUrl = '') {
@@ -955,56 +991,44 @@ function escapeFfmpegFilterPath(filePath) {
     .replace(/:/g, '\\:');
 }
 
-function getImageMotionPreset(sceneIndex) {
-  if (sceneIndex === 0) {
-    return {
-      zoomStart: 1.0,
-      zoomStep: 0.0015,
-      zoomMax: 1.16,
-      xFactor: 0.50,
-      yFactor: 0.50
-    };
+const MOTION_PRESETS = [
+  { dir: 'zoom-in-center',      zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.50, yFactor: 0.50 },
+  { dir: 'zoom-out-center',     zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.50, yFactor: 0.50 },
+  { dir: 'zoom-in-topleft',     zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.20, yFactor: 0.20 },
+  { dir: 'zoom-in-bottomright', zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.80, yFactor: 0.80 },
+  { dir: 'zoom-out-left',       zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.25, yFactor: 0.50 },
+  { dir: 'zoom-in-topright',    zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.80, yFactor: 0.20 },
+  { dir: 'zoom-in-bottomleft',  zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.20, yFactor: 0.80 },
+  { dir: 'zoom-out-right',      zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.75, yFactor: 0.50 }
+];
+
+function getImageMotionPreset(sceneIndex, motionPresetName) {
+  if (motionPresetName) {
+    const found = MOTION_PRESETS.find((p) => p.dir === motionPresetName);
+    if (found) return found;
   }
-
-  if (sceneIndex === 1) {
-    return {
-      zoomStart: 1.0,
-      zoomStep: 0.0013,
-      zoomMax: 1.14,
-      xFactor: 0.46,
-      yFactor: 0.40
-    };
-  }
-
-  const subtlePresets = [
-    { xFactor: 0.50, yFactor: 0.50 },
-    { xFactor: 0.48, yFactor: 0.45 },
-    { xFactor: 0.52, yFactor: 0.42 },
-    { xFactor: 0.47, yFactor: 0.54 }
-  ];
-
-  const subtle = subtlePresets[(sceneIndex - 2) % subtlePresets.length];
-
-  return {
-    zoomStart: 1.0,
-    zoomStep: 0.0007,
-    zoomMax: 1.07,
-    xFactor: subtle.xFactor,
-    yFactor: subtle.yFactor
-  };
+  return MOTION_PRESETS[sceneIndex % MOTION_PRESETS.length];
 }
 
-function buildImageMotionFilter(scene, sceneIndex, width, height) {
+function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetName) {
   const frames = Math.max(1, Math.ceil(Number(scene.inputDuration || 0) * 25));
-  const motion = getImageMotionPreset(sceneIndex);
+  const motion = getImageMotionPreset(sceneIndex, motionPresetName);
   const duration = Number(scene.inputDuration.toFixed(3));
   const xExpr = `(iw-iw/zoom)*${motion.xFactor}`;
   const yExpr = `(ih-ih/zoom)*${motion.yFactor}`;
 
+  let zExpr;
+  if (motion.zoomStep >= 0) {
+    zExpr = `if(lte(on,1),${motion.zoomStart},min(zoom+${motion.zoomStep},${motion.zoomMax}))`;
+  } else {
+    const zMin = motion.zoomMin != null ? motion.zoomMin : 1.0;
+    zExpr = `if(lte(on,1),${motion.zoomStart},max(zoom${motion.zoomStep},${zMin}))`;
+  }
+
   return `[${sceneIndex}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
     `crop=${width}:${height},` +
     `zoompan=` +
-    `z='if(lte(on,1),${motion.zoomStart},min(zoom+${motion.zoomStep},${motion.zoomMax}))':` +
+    `z='${zExpr}':` +
     `x='${xExpr}':` +
     `y='${yExpr}':` +
     `d=${frames}:s=${width}x${height}:fps=25,` +
@@ -1038,7 +1062,17 @@ function buildAssContent({
   const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B');
   const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
 
-  const normalizedWordTimings = normalizeWordTimings(wordTimings);
+  const subtitleAnimation = String(subtitleStyle.animation || 'none').trim().toLowerCase();
+  let animTag = '';
+  if (subtitleAnimation === 'fade') {
+    animTag = '{\\fad(200,150)}';
+  } else if (subtitleAnimation === 'pop') {
+    animTag = '{\\fad(80,100)\\t(0,120,\\fscx110\\fscy110)\\t(120,220,\\fscx100\\fscy100)}';
+  } else if (subtitleAnimation === 'slide-up') {
+    animTag = '{\\move(540,1080,540,960,0,200)}';
+  }
+
+
 
   const phraseEvents = scenePlan.length > 0
     ? buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle)
@@ -1070,11 +1104,11 @@ Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTe
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-${events.map((event) => `Dialogue: 0,${formatAssTime(event.start)},${formatAssTime(event.end)},Default,,0,0,0,,${event.text}`).join('\n')}
+${events.map((event) => `Dialogue: 0,${formatAssTime(event.start)},${formatAssTime(event.end)},Default,,0,0,0,,${animTag}${event.text}`).join('\n')}
 `;
 }
 
-async function processJob(jobId) {
+async function _processJobInner(jobId) {
   const job = jobs.get(jobId);
   if (!job) return;
 
@@ -1208,7 +1242,7 @@ async function processJob(jobId) {
 
       if (scene.type === 'image') {
         filterParts.push(
-          buildImageMotionFilter(scene, i, width, height)
+          buildImageMotionFilter(scene, i, width, height, subtitleStyle.motionPreset)
         );
       } else {
         const padDuration = Math.max(0, Number(scene.inputDuration) - Number(scene.sourceDuration || 0));
@@ -1307,10 +1341,24 @@ async function processJob(jobId) {
     job.status = 'done';
     job.videoUrl = `${BASE_URL}/output/${jobId}.mp4`;
     job.error = null;
+    await sendWebhook(job);
   } catch (error) {
     job.status = 'fail';
     job.error = error.message;
     job.videoUrl = null;
+    await sendWebhook(job);
+  }
+}
+
+async function processJob(jobId) {
+  while (activeJobs >= MAX_CONCURRENT_JOBS) {
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  activeJobs++;
+  try {
+    await _processJobInner(jobId);
+  } finally {
+    activeJobs--;
   }
 }
 
@@ -1341,7 +1389,8 @@ app.post('/render', authMiddleware, (req, res) => {
     resolution = '1080x1920',
     subtitleStyle = {},
     logoUrl = '',
-    wordTimings = []
+    wordTimings = [],
+    webhookUrl = ''
   } = req.body || {};
 
   const normalizedMedia = normalizeMediaItems({ media, images });
@@ -1377,7 +1426,8 @@ app.post('/render', authMiddleware, (req, res) => {
       resolution,
       subtitleStyle,
       logoUrl,
-      wordTimings
+      wordTimings,
+      webhookUrl: String(webhookUrl || '').trim()
     },
     videoUrl: null,
     error: null
@@ -1402,10 +1452,15 @@ app.get('/status/:jobId', authMiddleware, (req, res) => {
     });
   }
 
+  const queuePosition = job.status === 'queued'
+    ? [...jobs.values()].filter((j) => j.status === 'queued' && j.createdAt < job.createdAt).length
+    : 0;
+
   res.json({
     ok: true,
     jobId: job.jobId,
     status: job.status,
+    queuePosition,
     error: job.error
   });
 });
