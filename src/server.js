@@ -190,9 +190,14 @@ const ALLOWED_TRANSITIONS = [
 
 function getAllowedTransition(transitionType) {
   if (transitionType === 'random') {
-    return ALLOWED_TRANSITIONS[Math.floor(Math.random() * ALLOWED_TRANSITIONS.length)];
+    // Возвращаем 'random' — конкретный переход будет выбираться для каждой сцены отдельно
+    return 'random';
   }
   return ALLOWED_TRANSITIONS.includes(transitionType) ? transitionType : 'fade';
+}
+
+function getRandomTransition() {
+  return ALLOWED_TRANSITIONS[Math.floor(Math.random() * ALLOWED_TRANSITIONS.length)];
 }
 
 function guessMediaTypeFromUrl(fileUrl = '') {
@@ -1263,6 +1268,8 @@ function buildAssContent({
 
   // Padding активного блока — пропорционально шрифту, создаёт визуальный эффект скругления
   const activeBoxPad = Math.round(fontSize * 0.22);
+  // Shadow того же цвета = тень расширяет блок во все стороны → скруглённый вид
+  const activeBoxShadow = Math.round(activeBoxPad * 0.55);
 
   return `[Script Info]
 ScriptType: v4.00+
@@ -1274,7 +1281,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
-Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,${activeBoxPad},0,${alignment},${marginL},${marginR},${marginV},1
+Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,${activeBoxPad},${activeBoxShadow},${alignment},${marginL},${marginR},${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -1480,9 +1487,11 @@ async function _processJobInner(jobId) {
       for (let i = 1; i < scenePlan.length; i++) {
         const xfadeLabel = `x${i}`;
         const offset = Number(cumulativeVisible.toFixed(3));
+        // Если режим random — каждый переход выбирается заново независимо
+        const thisTransition = transitionType === 'random' ? getRandomTransition() : transitionType;
 
         filterParts.push(
-          `[${previousLabel}][v${i}r]xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset}[${xfadeLabel}]`
+          `[${previousLabel}][v${i}r]xfade=transition=${thisTransition}:duration=${transitionDuration}:offset=${offset}[${xfadeLabel}]`
         );
 
         previousLabel = xfadeLabel;
