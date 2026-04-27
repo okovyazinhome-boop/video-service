@@ -1067,9 +1067,17 @@ function getImageMotionPreset(sceneIndex, motionPresetName) {
 }
 
 function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetName) {
+  const duration = Number(scene.inputDuration.toFixed(3));
+
+  // Если motion отключён — просто scale+crop без zoompan
+  if (motionPresetName === 'none') {
+    return `[${sceneIndex}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
+      `crop=${width}:${height},` +
+      `setsar=1,fps=25,format=yuv420p,trim=duration=${duration},setpts=PTS-STARTPTS[v${sceneIndex}]`;
+  }
+
   const frames = Math.max(1, Math.ceil(Number(scene.inputDuration || 0) * 25));
   const motion = getImageMotionPreset(sceneIndex, motionPresetName);
-  const duration = Number(scene.inputDuration.toFixed(3));
   const xExpr = `(iw-iw/zoom)*${motion.xFactor}`;
   const yExpr = `(ih-ih/zoom)*${motion.yFactor}`;
 
