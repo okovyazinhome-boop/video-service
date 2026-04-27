@@ -1,0 +1,9 @@
+[
+  {
+    "name": "video",
+    "label": "🎬 Video",
+    "modules": [
+      "renderVideo"
+    ]
+  }
+]

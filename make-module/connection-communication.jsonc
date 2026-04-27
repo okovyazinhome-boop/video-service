@@ -1,0 +1,29 @@
+[
+  {
+    "url": "{{parameters.serviceUrl}}/health",
+    "method": "GET",
+    "headers": {
+      "Authorization": "{{if(parameters.apiKey, 'Bearer ' + parameters.apiKey, omit)}}"
+    },
+    "response": {
+      "valid": "{{body.ok === true}}",
+      "metadata": {
+        "type": "text",
+        "value": "Video Service"
+      },
+      "data": {
+        "serviceUrl": "{{parameters.serviceUrl}}",
+        "apiKey": "{{parameters.apiKey}}"
+      },
+      "error": {
+        "type": "ConnectionError",
+        "message": "[{{statusCode}}] Connection failed: {{body.error || 'Check your Service URL and API Key'}}"
+      }
+    },
+    "log": {
+      "sanitize": [
+        "request.headers.Authorization"
+      ]
+    }
+  }
+]

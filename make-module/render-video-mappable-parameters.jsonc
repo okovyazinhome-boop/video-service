@@ -1,0 +1,262 @@
+[
+  // === МЕДИА ===
+  {
+    "name": "images",
+    "type": "array",
+    "label": "🖼️ Изображения (URL)",
+    "required": true,
+    "spec": {
+      "type": "url",
+      "label": "URL изображения"
+    },
+    "validate": {
+      "minItems": 1,
+      "maxItems": 15
+    },
+    "help": "Массив публичных ссылок на изображения (JPEG, PNG, WEBP). От 1 до 15 штук"
+  },
+  {
+    "name": "voiceMp3",
+    "type": "url",
+    "label": "🎙️ Озвучка (MP3 URL)",
+    "required": true,
+    "help": "Публичная ссылка на MP3-файл с озвучкой. Обязательное поле"
+  },
+  {
+    "name": "musicMp3",
+    "type": "url",
+    "label": "🎵 Фоновая музыка (MP3 URL)",
+    "required": false,
+    "help": "Публичная ссылка на MP3-файл с фоновой музыкой. Необязательно"
+  },
+  {
+    "name": "musicVolume",
+    "type": "number",
+    "label": "🔊 Громкость музыки",
+    "required": false,
+    "default": 0.15,
+    "validate": {
+      "min": 0,
+      "max": 1
+    },
+    "help": "Громкость фоновой музыки от 0 (тишина) до 1 (максимум). По умолчанию 0.15"
+  },
+
+  // === СУБТИТРЫ ===
+  {
+    "name": "subtitlesText",
+    "type": "text",
+    "label": "📝 Текст субтитров",
+    "required": false,
+    "help": "Полный текст субтитров. Если указаны wordTimings — текст берётся из них"
+  },
+  {
+    "name": "wordTimings",
+    "type": "array",
+    "label": "⏱️ Таймкоды слов (ElevenLabs)",
+    "required": false,
+    "spec": {
+      "type": "collection",
+      "label": "Слово",
+      "spec": [
+        {
+          "name": "text",
+          "type": "text",
+          "label": "Слово",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "number",
+          "label": "Начало (сек)",
+          "required": true
+        },
+        {
+          "name": "end",
+          "type": "number",
+          "label": "Конец (сек)",
+          "required": true
+        }
+      ]
+    },
+    "help": "Массив таймкодов слов из ElevenLabs. Формат: [{text, start, end}, ...]. Позволяет синхронизировать подсветку слов"
+  },
+
+  // === ПЕРЕХОДЫ ===
+  {
+    "name": "transitionType",
+    "type": "select",
+    "label": "🎞️ Тип перехода",
+    "required": false,
+    "default": "fade",
+    "options": [
+      { "label": "🎲 Случайный (Random)", "value": "random" },
+      { "label": "Fade", "value": "fade" },
+      { "label": "Fade to Black", "value": "fadeblack" },
+      { "label": "Fade to White", "value": "fadewhite" },
+      { "label": "Dissolve", "value": "dissolve" },
+      { "label": "Smooth Left", "value": "smoothleft" },
+      { "label": "Smooth Right", "value": "smoothright" },
+      { "label": "Slide Left", "value": "slideleft" },
+      { "label": "Slide Right", "value": "slideright" },
+      { "label": "Zoom In", "value": "zoomin" },
+      { "label": "Pixelize", "value": "pixelize" },
+      { "label": "Circle Open", "value": "circleopen" },
+      { "label": "Circle Close", "value": "circleclose" },
+      { "label": "Radial", "value": "radial" },
+      { "label": "Cover Left", "value": "coverleft" },
+      { "label": "Cover Right", "value": "coverright" },
+      { "label": "Cover Up", "value": "coverup" },
+      { "label": "Cover Down", "value": "coverdown" },
+      { "label": "Reveal Left", "value": "revealleft" },
+      { "label": "Reveal Right", "value": "revealright" },
+      { "label": "Wipe Left", "value": "wipeleft" },
+      { "label": "Wipe Right", "value": "wiperight" },
+      { "label": "Wipe Up", "value": "wipeup" },
+      { "label": "Wipe Down", "value": "wipedown" },
+      { "label": "Squeeze Horizontal", "value": "squeezeh" },
+      { "label": "Squeeze Vertical", "value": "squeezev" }
+    ],
+    "help": "Тип перехода между изображениями. Random — случайный из всех доступных"
+  },
+
+  // === СТИЛЬ СУБТИТРОВ ===
+  {
+    "name": "subtitleMode",
+    "type": "select",
+    "label": "💬 Режим субтитров",
+    "required": false,
+    "default": "word-highlight",
+    "options": [
+      { "label": "Подсветка слов (Word Highlight)", "value": "word-highlight" },
+      { "label": "Фразы (Phrase)", "value": "phrase" }
+    ],
+    "help": "word-highlight — подсвечивает каждое слово цветным блоком при произнесении. phrase — показывает целые фразы"
+  },
+  {
+    "name": "subtitleAnimation",
+    "type": "select",
+    "label": "✨ Анимация субтитров",
+    "required": false,
+    "default": "fade",
+    "options": [
+      { "label": "Без анимации", "value": "none" },
+      { "label": "Плавное появление (Fade)", "value": "fade" },
+      { "label": "Всплытие (Pop)", "value": "pop" },
+      { "label": "Выезд снизу (Slide Up)", "value": "slide-up" }
+    ],
+    "help": "Анимация появления субтитров"
+  },
+  {
+    "name": "fontName",
+    "type": "text",
+    "label": "🔤 Шрифт",
+    "required": false,
+    "default": "Inter",
+    "help": "Название шрифта для субтитров (например: Inter, Arial, Roboto). Шрифт должен быть установлен на сервере"
+  },
+  {
+    "name": "fontSize",
+    "type": "number",
+    "label": "🔠 Размер шрифта",
+    "required": false,
+    "default": 50,
+    "validate": {
+      "min": 12,
+      "max": 200
+    },
+    "help": "Размер шрифта субтитров в пунктах. По умолчанию рассчитывается от разрешения"
+  },
+  {
+    "name": "primaryColor",
+    "type": "color",
+    "label": "🎨 Цвет текста",
+    "required": false,
+    "default": "#FFFFFF",
+    "help": "Основной цвет текста субтитров. Формат HEX (#RRGGBB)"
+  },
+  {
+    "name": "outlineColor",
+    "type": "color",
+    "label": "🖊️ Цвет обводки",
+    "required": false,
+    "default": "#000000",
+    "help": "Цвет контура/обводки текста субтитров"
+  },
+  {
+    "name": "activeWordTextColor",
+    "type": "color",
+    "label": "💜 Цвет активного слова (текст)",
+    "required": false,
+    "default": "#FFFFFF",
+    "help": "Цвет текста активного (произносимого) слова в режиме Word Highlight"
+  },
+  {
+    "name": "activeWordBackColor",
+    "type": "color",
+    "label": "🟪 Цвет активного слова (фон)",
+    "required": false,
+    "default": "#8B5CF6",
+    "help": "Цвет фонового блока активного слова. По умолчанию фиолетовый (#8B5CF6)"
+  },
+  {
+    "name": "bold",
+    "type": "boolean",
+    "label": "𝐁 Жирный шрифт",
+    "required": false,
+    "default": true,
+    "help": "Использовать жирное начертание для субтитров"
+  },
+
+  // === ЭФФЕКТ ДВИЖЕНИЯ ===
+  {
+    "name": "motionPreset",
+    "type": "select",
+    "label": "🎥 Эффект движения (Ken Burns)",
+    "required": false,
+    "default": "auto",
+    "options": [
+      { "label": "Авто (чередование)", "value": "auto" },
+      { "label": "Zoom In — Центр", "value": "zoom-in-center" },
+      { "label": "Zoom Out — Центр", "value": "zoom-out-center" },
+      { "label": "Zoom In — Верх лево", "value": "zoom-in-topleft" },
+      { "label": "Zoom In — Верх право", "value": "zoom-in-topright" },
+      { "label": "Zoom In — Низ лево", "value": "zoom-in-bottomleft" },
+      { "label": "Zoom In — Низ право", "value": "zoom-in-bottomright" },
+      { "label": "Zoom Out — Лево", "value": "zoom-out-left" },
+      { "label": "Zoom Out — Право", "value": "zoom-out-right" }
+    ],
+    "help": "Эффект плавного движения камеры на изображениях. auto — циклически чередует разные направления"
+  },
+
+  // === ТЕХНИЧЕСКИЕ НАСТРОЙКИ ===
+  {
+    "name": "resolution",
+    "type": "select",
+    "label": "📺 Разрешение видео",
+    "required": false,
+    "default": "1080x1920",
+    "options": [
+      { "label": "1080×1920 (Full HD вертикальное)", "value": "1080x1920" },
+      { "label": "720×1280 (HD вертикальное)", "value": "720x1280" },
+      { "label": "1920×1080 (Full HD горизонтальное)", "value": "1920x1080" },
+      { "label": "1280×720 (HD горизонтальное)", "value": "1280x720" },
+      { "label": "1080×1080 (Квадрат)", "value": "1080x1080" }
+    ],
+    "help": "Разрешение выходного видео"
+  },
+  {
+    "name": "logoUrl",
+    "type": "url",
+    "label": "🏷️ Логотип (URL)",
+    "required": false,
+    "help": "Публичная ссылка на PNG-изображение логотипа для наложения на видео"
+  },
+  {
+    "name": "webhookUrl",
+    "type": "url",
+    "label": "🔔 Webhook URL",
+    "required": false,
+    "help": "URL для получения уведомления по завершении рендера. Сервис отправит POST с {jobId, status, videoUrl, error}"
+  }
+]

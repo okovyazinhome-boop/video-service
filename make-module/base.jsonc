@@ -1,0 +1,12 @@
+{
+  "baseUrl": "{{connection.serviceUrl}}",
+  "headers": {
+    "Authorization": "{{if(connection.apiKey, 'Bearer ' + connection.apiKey, omit)}}",
+    "Content-Type": "application/json"
+  },
+  "log": {
+    "sanitize": [
+      "request.headers.Authorization"
+    ]
+  }
+}

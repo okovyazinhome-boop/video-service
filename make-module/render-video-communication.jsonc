@@ -1,0 +1,82 @@
+[
+  // ===== ШАГ 1: Создание задачи рендера =====
+  {
+    "url": "/render",
+    "method": "POST",
+    "body": {
+      "images": "{{parameters.images}}",
+      "voiceMp3": "{{parameters.voiceMp3}}",
+      "musicMp3": "{{if(parameters.musicMp3, parameters.musicMp3, omit)}}",
+      "musicVolume": "{{if(parameters.musicVolume, parameters.musicVolume, 0.15)}}",
+      "subtitlesText": "{{if(parameters.subtitlesText, parameters.subtitlesText, omit)}}",
+      "wordTimings": "{{if(parameters.wordTimings, parameters.wordTimings, omit)}}",
+      "transitionType": "{{if(parameters.transitionType, parameters.transitionType, 'fade')}}",
+      "resolution": "{{if(parameters.resolution, parameters.resolution, '1080x1920')}}",
+      "logoUrl": "{{if(parameters.logoUrl, parameters.logoUrl, omit)}}",
+      "webhookUrl": "{{if(parameters.webhookUrl, parameters.webhookUrl, omit)}}",
+      "subtitleStyle": {
+        "mode": "{{if(parameters.subtitleMode, parameters.subtitleMode, 'word-highlight')}}",
+        "animation": "{{if(parameters.subtitleAnimation, parameters.subtitleAnimation, 'fade')}}",
+        "fontName": "{{if(parameters.fontName, parameters.fontName, 'Inter')}}",
+        "fontSize": "{{if(parameters.fontSize, parameters.fontSize, omit)}}",
+        "primaryColor": "{{if(parameters.primaryColor, parameters.primaryColor, '#FFFFFF')}}",
+        "outlineColor": "{{if(parameters.outlineColor, parameters.outlineColor, '#000000')}}",
+        "activeWordTextColor": "{{if(parameters.activeWordTextColor, parameters.activeWordTextColor, '#FFFFFF')}}",
+        "activeWordBackColor": "{{if(parameters.activeWordBackColor, parameters.activeWordBackColor, '#8B5CF6')}}",
+        "bold": "{{if(parameters.bold !== undefined, parameters.bold, true)}}",
+        "motionPreset": "{{if(parameters.motionPreset && parameters.motionPreset !== 'auto', parameters.motionPreset, omit)}}"
+      }
+    },
+    "response": {
+      "valid": "{{body.ok === true}}",
+      "error": {
+        "type": "RuntimeError",
+        "message": "[{{statusCode}}] {{body.error}}"
+      },
+      "temp": {
+        "jobId": "{{body.jobId}}"
+      }
+    }
+  },
+
+  // ===== ШАГ 2: Поллинг статуса до завершения =====
+  {
+    "url": "/status/{{temp.jobId}}",
+    "method": "GET",
+    "response": {
+      "valid": "{{body.ok === true}}",
+      "error": {
+        "type": "RuntimeError",
+        "message": "[{{statusCode}}] {{body.error}}"
+      },
+      "temp": {
+        "status": "{{body.status}}",
+        "queuePosition": "{{body.queuePosition}}"
+      }
+    },
+    "repeat": {
+      "condition": "{{temp.status !== 'done' && temp.status !== 'fail'}}",
+      "delay": 10000,
+      "limit": 360
+    }
+  },
+
+  // ===== ШАГ 3: Получение результата =====
+  {
+    "url": "/result/{{temp.jobId}}",
+    "method": "GET",
+    "response": {
+      "valid": "{{body.ok === true && body.status === 'done'}}",
+      "error": {
+        "type": "RuntimeError",
+        "message": "{{if(body.status === 'fail', 'Render failed: ' + (body.error || 'Unknown error'), '[' + statusCode + '] ' + (body.error || 'Unknown error'))}}"
+      },
+      "output": {
+        "jobId": "{{body.jobId}}",
+        "status": "{{body.status}}",
+        "videoUrl": "{{body.videoUrl}}",
+        "error": "{{body.error}}"
+      }
+    }
+  }
+]

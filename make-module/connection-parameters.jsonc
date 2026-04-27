@@ -1,0 +1,17 @@
+[
+  {
+    "name": "serviceUrl",
+    "type": "text",
+    "label": "Service URL",
+    "required": true,
+    "default": "https://video.uraltrackpro.ru",
+    "help": "Base URL of your Video Service (e.g. https://video.uraltrackpro.ru or http://localhost:3000)"
+  },
+  {
+    "name": "apiKey",
+    "type": "password",
+    "label": "API Key",
+    "required": false,
+    "help": "API key for authentication. Leave empty if auth is disabled on your server"
+  }
+]
