@@ -3,17 +3,33 @@
   {
     "name": "images",
     "type": "array",
-    "label": "🖼️ Изображения (URL)",
+    "label": "🖼️ Изображения",
     "required": true,
     "spec": {
-      "type": "url",
-      "label": "URL изображения"
+      "type": "collection",
+      "label": "Изображение",
+      "spec": [
+        {
+          "name": "url",
+          "type": "url",
+          "label": "URL изображения",
+          "required": true,
+          "help": "Публичная ссылка на JPEG, PNG или WEBP"
+        },
+        {
+          "name": "overlayText",
+          "type": "text",
+          "label": "Надпись поверх",
+          "required": false,
+          "help": "Текст, который будет наложен поверх этого изображения. Оставьте пустым, чтобы не добавлять надпись"
+        }
+      ]
     },
     "validate": {
       "minItems": 1,
       "maxItems": 15
     },
-    "help": "Массив публичных ссылок на изображения (JPEG, PNG, WEBP). От 1 до 15 штук"
+    "help": "Массив изображений (JPEG, PNG, WEBP). Для каждого можно задать свою надпись"
   },
   {
     "name": "voiceMp3",
@@ -91,31 +107,23 @@
     "default": "fade",
     "options": [
       { "label": "🎲 Случайный (Random)", "value": "random" },
-      { "label": "Fade", "value": "fade" },
+      { "label": "Fade (плавное затухание)", "value": "fade" },
       { "label": "Fade to Black", "value": "fadeblack" },
       { "label": "Fade to White", "value": "fadewhite" },
-      { "label": "Dissolve", "value": "dissolve" },
+      { "label": "Dissolve (растворение)", "value": "dissolve" },
       { "label": "Smooth Left", "value": "smoothleft" },
       { "label": "Smooth Right", "value": "smoothright" },
       { "label": "Slide Left", "value": "slideleft" },
       { "label": "Slide Right", "value": "slideright" },
       { "label": "Zoom In", "value": "zoomin" },
-      { "label": "Pixelize", "value": "pixelize" },
+      { "label": "Pixelize (пикселизация)", "value": "pixelize" },
       { "label": "Circle Open", "value": "circleopen" },
       { "label": "Circle Close", "value": "circleclose" },
-      { "label": "Radial", "value": "radial" },
-      { "label": "Cover Left", "value": "coverleft" },
-      { "label": "Cover Right", "value": "coverright" },
-      { "label": "Cover Up", "value": "coverup" },
-      { "label": "Cover Down", "value": "coverdown" },
-      { "label": "Reveal Left", "value": "revealleft" },
-      { "label": "Reveal Right", "value": "revealright" },
+      { "label": "Radial (радиальный)", "value": "radial" },
       { "label": "Wipe Left", "value": "wipeleft" },
       { "label": "Wipe Right", "value": "wiperight" },
       { "label": "Wipe Up", "value": "wipeup" },
-      { "label": "Wipe Down", "value": "wipedown" },
-      { "label": "Squeeze Horizontal", "value": "squeezeh" },
-      { "label": "Squeeze Vertical", "value": "squeezev" }
+      { "label": "Wipe Down", "value": "wipedown" }
     ],
     "help": "Тип перехода между изображениями. Random — случайный из всех доступных"
   },
@@ -149,11 +157,21 @@
   },
   {
     "name": "fontName",
-    "type": "text",
-    "label": "🔤 Шрифт",
+    "type": "select",
+    "label": "🔤 Шрифт субтитров",
     "required": false,
     "default": "Inter",
-    "help": "Название шрифта для субтитров (например: Inter, Arial, Roboto). Шрифт должен быть установлен на сервере"
+    "options": [
+      { "label": "Inter (современный, по умолчанию)", "value": "Inter" },
+      { "label": "Roboto (Google, нейтральный)", "value": "Roboto" },
+      { "label": "Montserrat (геометрический, жирный)", "value": "Montserrat" },
+      { "label": "Oswald (узкий, заголовочный)", "value": "Oswald" },
+      { "label": "Raleway (элегантный)", "value": "Raleway" },
+      { "label": "Nunito (мягкий, скруглённый)", "value": "Nunito" },
+      { "label": "Bebas Neue (капсулы, броский)", "value": "BebasNeue" },
+      { "label": "Ubuntu (технологичный)", "value": "Ubuntu" }
+    ],
+    "help": "Шрифт для субтитров. Все шрифты предустановлены на сервере"
   },
   {
     "name": "fontSize",
@@ -216,6 +234,7 @@
     "required": false,
     "default": "auto",
     "options": [
+      { "label": "❌ Отключён (без движения)", "value": "none" },
       { "label": "Авто (чередование)", "value": "auto" },
       { "label": "Zoom In — Центр", "value": "zoom-in-center" },
       { "label": "Zoom Out — Центр", "value": "zoom-out-center" },
@@ -226,7 +245,111 @@
       { "label": "Zoom Out — Лево", "value": "zoom-out-left" },
       { "label": "Zoom Out — Право", "value": "zoom-out-right" }
     ],
-    "help": "Эффект плавного движения камеры на изображениях. auto — циклически чередует разные направления"
+    "help": "Эффект плавного движения камеры на изображениях. none — статичное изображение без движения. auto — циклически чередует разные направления"
+  },
+
+  // === СТИЛЬ НАДПИСЕЙ ===
+  {
+    "name": "overlayFontName",
+    "type": "select",
+    "label": "✏️ Надпись — шрифт",
+    "required": false,
+    "default": "Inter",
+    "options": [
+      { "label": "Inter (современный, по умолчанию)", "value": "Inter" },
+      { "label": "Roboto (Google, нейтральный)", "value": "Roboto" },
+      { "label": "Montserrat (геометрический, жирный)", "value": "Montserrat" },
+      { "label": "Oswald (узкий, заголовочный)", "value": "Oswald" },
+      { "label": "Raleway (элегантный)", "value": "Raleway" },
+      { "label": "Nunito (мягкий, скруглённый)", "value": "Nunito" },
+      { "label": "Bebas Neue (капсулы, броский)", "value": "BebasNeue" },
+      { "label": "Ubuntu (технологичный)", "value": "Ubuntu" }
+    ],
+    "help": "Шрифт для надписей на изображениях. Все шрифты предустановлены на сервере"
+  },
+  {
+    "name": "overlayFontSize",
+    "type": "number",
+    "label": "🔡 Надпись — размер шрифта",
+    "required": false,
+    "validate": {
+      "min": 12,
+      "max": 300
+    },
+    "help": "Размер шрифта надписи в пикселях. По умолчанию ~4.5% высоты видео"
+  },
+  {
+    "name": "overlayFontColor",
+    "type": "color",
+    "label": "🎨 Надпись — цвет текста",
+    "required": false,
+    "default": "#FFFFFF",
+    "help": "Цвет текста надписи"
+  },
+  {
+    "name": "overlayPosition",
+    "type": "select",
+    "label": "📍 Надпись — позиция",
+    "required": false,
+    "default": "top",
+    "options": [
+      { "label": "Сверху", "value": "top" },
+      { "label": "По центру", "value": "center" },
+      { "label": "Снизу", "value": "bottom" }
+    ],
+    "help": "Вертикальное расположение надписи на изображении"
+  },
+  {
+    "name": "overlayBgColor",
+    "type": "color",
+    "label": "🟫 Надпись — цвет фона",
+    "required": false,
+    "default": "#000000",
+    "help": "Цвет подложки под надписью. Формат HEX (#RRGGBB). Прозрачность настраивается отдельно параметром 'Надпись — прозрачность фона'"
+  },
+  {
+    "name": "overlayBgOpacity",
+    "type": "number",
+    "label": "🔲 Надпись — прозрачность фона",
+    "required": false,
+    "default": 0,
+    "validate": {
+      "min": 0,
+      "max": 1
+    },
+    "help": "Прозрачность фоновой подложки: 0 — полностью прозрачный (нет фона), 1 — полностью непрозрачный. Например 0.6 — полупрозрачная подложка"
+  },
+  {
+    "name": "overlayBgPadding",
+    "type": "number",
+    "label": "📐 Надпись — отступ фона (px)",
+    "required": false,
+    "default": 8,
+    "validate": {
+      "min": 0,
+      "max": 60
+    },
+    "help": "Отступ между текстом и краями фоновой подложки в пикселях. Чем больше — тем шире подложка. Также визуально создаёт эффект скругления"
+  },
+  {
+    "name": "overlayOutline",
+    "type": "number",
+    "label": "🖊️ Надпись — толщина обводки",
+    "required": false,
+    "default": 2,
+    "validate": {
+      "min": 0,
+      "max": 10
+    },
+    "help": "Толщина чёрной обводки вокруг текста надписи. 0 — без обводки"
+  },
+  {
+    "name": "overlayBold",
+    "type": "boolean",
+    "label": "𝐁 Надпись — жирный",
+    "required": false,
+    "default": true,
+    "help": "Жирное начертание для надписей"
   },
 
   // === ТЕХНИЧЕСКИЕ НАСТРОЙКИ ===

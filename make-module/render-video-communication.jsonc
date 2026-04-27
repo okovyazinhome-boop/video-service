@@ -25,6 +25,17 @@
         "activeWordBackColor": "{{if(parameters.activeWordBackColor, parameters.activeWordBackColor, '#8B5CF6')}}",
         "bold": "{{if(parameters.bold !== undefined, parameters.bold, true)}}",
         "motionPreset": "{{if(parameters.motionPreset && parameters.motionPreset !== 'auto', parameters.motionPreset, omit)}}"
+      },
+      "overlayStyle": {
+        "fontName": "{{if(parameters.overlayFontName, parameters.overlayFontName, 'Inter')}}",
+        "fontSize": "{{if(parameters.overlayFontSize, parameters.overlayFontSize, omit)}}",
+        "fontColor": "{{if(parameters.overlayFontColor, parameters.overlayFontColor, '#FFFFFF')}}",
+        "position": "{{if(parameters.overlayPosition, parameters.overlayPosition, 'top')}}",
+        "bgColor": "{{if(parameters.overlayBgColor, parameters.overlayBgColor, '#000000')}}",
+        "bgOpacity": "{{if(parameters.overlayBgOpacity !== undefined, parameters.overlayBgOpacity, 0.0)}}",
+        "bgPadding": "{{if(parameters.overlayBgPadding, parameters.overlayBgPadding, 8)}}",
+        "outline": "{{if(parameters.overlayOutline !== undefined, parameters.overlayOutline, 2)}}",
+        "bold": "{{if(parameters.overlayBold !== undefined, parameters.overlayBold, true)}}"
       }
     },
     "response": {
