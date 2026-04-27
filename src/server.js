@@ -864,9 +864,7 @@ function buildHighlightedPhraseText(tokens, activeIndex, maxCharsPerLine = 28) {
       line
         .map((token) => {
           if (token.index === activeIndex) {
-            // \rActiveWord переключает стиль (цвет обводки = glow-цвет, Outline = большой)
-            // \blur добавляет мягкое размытие ореола → эффект свечения без острых углов
-            return `{\\rActiveWord\\blur4}${token.text}{\\rDefault\\blur0}`;
+            return `{\\rActiveWord}${token.text}{\\rDefault}`;
           }
           return token.text;
         })
@@ -1268,10 +1266,9 @@ function buildAssContent({
       )
     : phraseEvents;
 
-  // Glow-эффект активного слова: толстая обводка цветом фона + blur → мягкое свечение
-  // BorderStyle: 1 (обычная обводка), Outline = большой → цветной ореол вокруг слова
-  const activeGlowBord = Math.round(fontSize * 0.38); // толщина ореола
-  const activeGlowBlur = Math.round(fontSize * 0.25); // размытие ореола
+  // Прямоугольный блок активного слова (BorderStyle:3 = opaque box)
+  // Padding пропорционален шрифту для визуального комфорта
+  const activeBoxPad = Math.round(fontSize * 0.20);
 
   return `[Script Info]
 ScriptType: v4.00+
@@ -1283,7 +1280,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
-Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},&H00000000,${bold},0,0,0,100,100,0,0,1,${activeGlowBord},0,${alignment},${marginL},${marginR},${marginV},1
+Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,${activeBoxPad},0,${alignment},${marginL},${marginR},${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
