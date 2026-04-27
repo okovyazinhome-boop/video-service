@@ -1,6 +1,6 @@
 FROM node:20-bookworm-slim
 
-# Системные зависимости + curl + unzip для скачивания шрифтов
+# Системные зависимости
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     fonts-dejavu-core \
@@ -18,62 +18,49 @@ COPY . .
 
 RUN mkdir -p storage/jobs storage/temp storage/output storage/fonts
 
-# ── Установка шрифтов ──────────────────────────────────────────────────────────
-# Inter (extras/ttf/ внутри zip)
+# ── Inter (GitHub rsms/inter — статические TTF) ───────────────────────────────
 RUN curl -sL "https://github.com/rsms/inter/releases/download/v4.0/Inter-4.0.zip" -o /tmp/inter.zip \
     && unzip -q /tmp/inter.zip -d /tmp/inter \
     && find /tmp/inter -name "Inter-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Inter.ttf \
     && find /tmp/inter -name "Inter-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Inter-Bold.ttf \
     && rm -rf /tmp/inter.zip /tmp/inter
 
+# ── Google Fonts — скачиваем файлы напрямую (variable fonts, работают как обычные TTF) ──
 # Roboto
-RUN curl -sL "https://fonts.google.com/download?family=Roboto" -o /tmp/roboto.zip \
-    && unzip -q /tmp/roboto.zip -d /tmp/roboto \
-    && find /tmp/roboto -name "Roboto-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Roboto.ttf \
-    && find /tmp/roboto -name "Roboto-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Roboto-Bold.ttf \
-    && rm -rf /tmp/roboto.zip /tmp/roboto
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto%5Bwdth%2Cwght%5D.ttf" \
+        -o storage/fonts/Roboto.ttf \
+    && cp storage/fonts/Roboto.ttf storage/fonts/Roboto-Bold.ttf
 
 # Montserrat
-RUN curl -sL "https://fonts.google.com/download?family=Montserrat" -o /tmp/montserrat.zip \
-    && unzip -q /tmp/montserrat.zip -d /tmp/montserrat \
-    && find /tmp/montserrat -name "Montserrat-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Montserrat.ttf \
-    && find /tmp/montserrat -name "Montserrat-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Montserrat-Bold.ttf \
-    && rm -rf /tmp/montserrat.zip /tmp/montserrat
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf" \
+        -o storage/fonts/Montserrat.ttf \
+    && cp storage/fonts/Montserrat.ttf storage/fonts/Montserrat-Bold.ttf
 
 # Oswald
-RUN curl -sL "https://fonts.google.com/download?family=Oswald" -o /tmp/oswald.zip \
-    && unzip -q /tmp/oswald.zip -d /tmp/oswald \
-    && find /tmp/oswald -name "Oswald-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Oswald.ttf \
-    && find /tmp/oswald -name "Oswald-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Oswald-Bold.ttf \
-    && rm -rf /tmp/oswald.zip /tmp/oswald
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/Oswald%5Bwght%5D.ttf" \
+        -o storage/fonts/Oswald.ttf \
+    && cp storage/fonts/Oswald.ttf storage/fonts/Oswald-Bold.ttf
 
 # Raleway
-RUN curl -sL "https://fonts.google.com/download?family=Raleway" -o /tmp/raleway.zip \
-    && unzip -q /tmp/raleway.zip -d /tmp/raleway \
-    && find /tmp/raleway -name "Raleway-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Raleway.ttf \
-    && find /tmp/raleway -name "Raleway-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Raleway-Bold.ttf \
-    && rm -rf /tmp/raleway.zip /tmp/raleway
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/raleway/Raleway%5Bwght%5D.ttf" \
+        -o storage/fonts/Raleway.ttf \
+    && cp storage/fonts/Raleway.ttf storage/fonts/Raleway-Bold.ttf
 
 # Nunito
-RUN curl -sL "https://fonts.google.com/download?family=Nunito" -o /tmp/nunito.zip \
-    && unzip -q /tmp/nunito.zip -d /tmp/nunito \
-    && find /tmp/nunito -name "Nunito-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Nunito.ttf \
-    && find /tmp/nunito -name "Nunito-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Nunito-Bold.ttf \
-    && rm -rf /tmp/nunito.zip /tmp/nunito
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/Nunito%5Bwght%5D.ttf" \
+        -o storage/fonts/Nunito.ttf \
+    && cp storage/fonts/Nunito.ttf storage/fonts/Nunito-Bold.ttf
 
-# Bebas Neue (только Regular — капсульный шрифт без Bold)
-RUN curl -sL "https://fonts.google.com/download?family=Bebas+Neue" -o /tmp/bebas.zip \
-    && unzip -q /tmp/bebas.zip -d /tmp/bebas \
-    && find /tmp/bebas -name "BebasNeue-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/BebasNeue.ttf \
-    && cp storage/fonts/BebasNeue.ttf storage/fonts/BebasNeue-Bold.ttf \
-    && rm -rf /tmp/bebas.zip /tmp/bebas
+# Bebas Neue (только Regular)
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf" \
+        -o storage/fonts/BebasNeue.ttf \
+    && cp storage/fonts/BebasNeue.ttf storage/fonts/BebasNeue-Bold.ttf
 
-# Ubuntu
-RUN curl -sL "https://fonts.google.com/download?family=Ubuntu" -o /tmp/ubuntu.zip \
-    && unzip -q /tmp/ubuntu.zip -d /tmp/ubuntu \
-    && find /tmp/ubuntu -name "Ubuntu-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Ubuntu.ttf \
-    && find /tmp/ubuntu -name "Ubuntu-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Ubuntu-Bold.ttf \
-    && rm -rf /tmp/ubuntu.zip /tmp/ubuntu
+# Ubuntu (ufl лицензия, отдельные файлы Regular и Bold)
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/Ubuntu-Regular.ttf" \
+        -o storage/fonts/Ubuntu.ttf \
+    && curl -sL "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/Ubuntu-Bold.ttf" \
+        -o storage/fonts/Ubuntu-Bold.ttf
 # ──────────────────────────────────────────────────────────────────────────────
 
 EXPOSE 3000
