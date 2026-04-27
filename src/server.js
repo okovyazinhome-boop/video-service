@@ -20,7 +20,7 @@ const MAX_CONCURRENT_JOBS = Number(process.env.MAX_CONCURRENT_JOBS) || 2;
 const JOB_TTL_MS = Number(process.env.JOB_TTL_HOURS || 24) * 60 * 60 * 1000;
 let activeJobs = 0;
 
-// Автоочистка завершённых задач и файлов
+// Автоочистка завершённых задач и файлов (каждые 15 минут)
 setInterval(async () => {
   const now = Date.now();
   for (const [jobId, job] of jobs.entries()) {
@@ -29,9 +29,10 @@ setInterval(async () => {
       await fs.remove(path.join('storage', 'jobs', jobId)).catch(() => {});
       await fs.remove(path.join('storage', 'output', `${jobId}.mp4`)).catch(() => {});
       jobs.delete(jobId);
+      console.log(`[TTL] Cleaned up job ${jobId}`);
     }
   }
-}, 60 * 60 * 1000);
+}, 15 * 60 * 1000);
 
 async function sendWebhook(job) {
   if (!job.payload.webhookUrl) return;
@@ -178,14 +179,13 @@ async function getMediaDuration(filePath) {
   return duration;
 }
 
+// Только переходы, поддерживаемые FFmpeg 5.x (Debian 12)
+// coverleft/coverright/coverup/coverdown/revealleft/revealright/squeezeh/squeezev — только FFmpeg 6+
 const ALLOWED_TRANSITIONS = [
   'fade', 'smoothleft', 'smoothright', 'slideleft', 'slideright',
   'zoomin', 'fadeblack', 'fadewhite', 'dissolve', 'pixelize',
   'circleopen', 'circleclose', 'radial',
-  'coverleft', 'coverright', 'coverup', 'coverdown',
-  'revealleft', 'revealright',
-  'wipeleft', 'wiperight', 'wipeup', 'wipedown',
-  'squeezeh', 'squeezev'
+  'wipeleft', 'wiperight', 'wipeup', 'wipedown'
 ];
 
 function getAllowedTransition(transitionType) {
@@ -1100,6 +1100,24 @@ function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetNa
 }
 
 /**
+ * Конвертирует HEX цвет (#RRGGBB или #RGB) + opacity (0.0–1.0)
+ * в формат 0xRRGGBBAA который понимает FFmpeg drawtext boxcolor.
+ * Если передан старый формат "black@0.5" — возвращает как есть.
+ */
+function hexToFfmpegColor(colorStr, opacity) {
+  if (!colorStr) return '0x00000000';
+  // Если уже в старом формате "color@alpha" или "0x..." — оставляем
+  if (colorStr.startsWith('0x') || colorStr.includes('@')) return colorStr;
+  // Парсим HEX
+  let hex = colorStr.replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+  if (hex.length !== 6) return colorStr; // не парсится — как есть
+  const alpha = Math.round(Math.min(1, Math.max(0, Number(opacity ?? 1))) * 255);
+  const alphaHex = alpha.toString(16).padStart(2, '0').toUpperCase();
+  return `0x${hex.toUpperCase()}${alphaHex}`;
+}
+
+/**
  * Строит FFmpeg drawtext-фильтр для наложения текстовой надписи поверх сцены.
  * inputLabel  — входной лейбл видеопотока (например 'v0')
  * outputLabel — выходной лейбл (например 'vt0')
@@ -1110,9 +1128,11 @@ function buildSceneDrawtextFilter(text, inputLabel, outputLabel, overlayStyle, w
   const fontColor  = String(overlayStyle.fontColor  || '#FFFFFF');
   const bold       = overlayStyle.bold !== false; // true по умолчанию
   const position   = String(overlayStyle.position   || 'top').toLowerCase(); // top | center | bottom
-  const bgColor    = String(overlayStyle.bgColor     || 'black@0.0');
-  const outline    = Number(overlayStyle.outline     ?? 2);
-  const marginV    = Number(overlayStyle.marginV     || Math.round(height * 0.04));
+  const bgColor    = String(overlayStyle.bgColor    || '#000000');
+  const bgOpacity  = overlayStyle.bgOpacity !== undefined ? Number(overlayStyle.bgOpacity) : 0.0;
+  const bgPadding  = Number(overlayStyle.bgPadding  ?? 8);  // отступ вокруг текста (px)
+  const outline    = Number(overlayStyle.outline    ?? 2);
+  const marginV    = Number(overlayStyle.marginV    || Math.round(height * 0.04));
 
   // Позиция по вертикали
   let yExpr;
@@ -1153,8 +1173,8 @@ function buildSceneDrawtextFilter(text, inputLabel, outputLabel, overlayStyle, w
     `borderw=${outline}`,
     `bordercolor=black@0.8`,
     `box=1`,
-    `boxcolor=${bgColor}`,
-    `boxborderw=8`,
+    `boxcolor=${hexToFfmpegColor(bgColor, bgOpacity)}`,
+    `boxborderw=${bgPadding}`,
     `x=(w-text_w)/2`,
     `y=${yExpr}`,
     `line_spacing=4`
@@ -1263,6 +1283,7 @@ async function _processJobInner(jobId) {
     const subtitleStyle = job.payload.subtitleStyle || {};
     const overlayStyle = job.payload.overlayStyle || {};
     const wordTimings = Array.isArray(job.payload.wordTimings) ? job.payload.wordTimings : [];
+    const logoUrl = String(job.payload.logoUrl || '').trim();
 
     if (!mediaItems.length) {
       throw new Error('media must be a non-empty array');
@@ -1362,6 +1383,7 @@ async function _processJobInner(jobId) {
 
     const voiceInputIndex = scenePlan.length;
     let musicInputIndex = null;
+    let logoInputIndex = null;
 
     if (musicUrl && musicPath) {
       ffmpegArgs.push(
@@ -1369,6 +1391,20 @@ async function _processJobInner(jobId) {
         '-i', musicPath
       );
       musicInputIndex = scenePlan.length + 1;
+    }
+
+    // Логотип: скачиваем и добавляем как входной поток
+    let logoPath = null;
+    if (logoUrl) {
+      logoPath = path.join(jobDir, `logo${getExtFromUrl(logoUrl, '.png')}`);
+      try {
+        await downloadToFile(logoUrl, logoPath);
+        ffmpegArgs.push('-i', logoPath);
+        logoInputIndex = scenePlan.length + (musicInputIndex !== null ? 2 : 1);
+      } catch (e) {
+        console.warn(`Logo download failed (${logoUrl}): ${e.message} — skipping logo`);
+        logoPath = null;
+      }
     }
 
     const filterParts = [];
@@ -1447,6 +1483,20 @@ async function _processJobInner(jobId) {
       );
 
       finalVideoLabel = subtitleVideoLabel;
+    }
+
+    // Логотип: накладываем в правый верхний угол с отступом 2% от ширины
+    if (logoPath && logoInputIndex !== null) {
+      const logoMargin = Math.round(width * 0.02);
+      const logoMaxW = Math.round(width * 0.20); // не больше 20% ширины
+      const logoLabel = 'vlogo';
+      filterParts.push(
+        `[${logoInputIndex}:v]scale=${logoMaxW}:-1:force_original_aspect_ratio=decrease[logoScaled]`
+      );
+      filterParts.push(
+        `[${finalVideoLabel}][logoScaled]overlay=x=W-w-${logoMargin}:y=${logoMargin}:format=auto[${logoLabel}]`
+      );
+      finalVideoLabel = logoLabel;
     }
 
     if (musicUrl && musicPath && musicInputIndex !== null) {
