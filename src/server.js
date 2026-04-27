@@ -1100,9 +1100,9 @@ function buildSceneDrawtextFilter(text, inputLabel, outputLabel, overlayStyle, w
   const fontName   = String(overlayStyle.fontName   || 'Inter');
   const fontSize   = Number(overlayStyle.fontSize   || Math.round(height * 0.045));
   const fontColor  = String(overlayStyle.fontColor  || '#FFFFFF');
-  const bold       = overlayStyle.bold === false ? 0 : 1;
+  const bold       = overlayStyle.bold !== false; // true по умолчанию
   const position   = String(overlayStyle.position   || 'top').toLowerCase(); // top | center | bottom
-  const bgColor    = String(overlayStyle.bgColor     || 'black@0.0'); // фон под текстом, по умолчанию прозрачный
+  const bgColor    = String(overlayStyle.bgColor     || 'black@0.0');
   const outline    = Number(overlayStyle.outline     ?? 2);
   const marginV    = Number(overlayStyle.marginV     || Math.round(height * 0.04));
 
@@ -1113,27 +1113,35 @@ function buildSceneDrawtextFilter(text, inputLabel, outputLabel, overlayStyle, w
   } else if (position === 'bottom') {
     yExpr = `h-text_h-${marginV}`;
   } else {
-    // top — по умолчанию
     yExpr = `${marginV}`;
   }
 
   // Экранирование текста для FFmpeg drawtext
   const safeText = text
     .replace(/\\/g, '\\\\')
-    .replace(/'/g, "’")   // апостроф → типографский, безопасен в фильтре
+    .replace(/'/g, "'")
     .replace(/:/g, '\\:')
     .replace(/\n/g, ' ');
 
-  // Путь к шрифту (ищем в fontsDir)
+  // Выбор файла шрифта: Bold вариант если доступен, иначе обычный
+  // FFmpeg drawtext не поддерживает параметр bold — жирность задаётся через файл шрифта
   const escapedFontsDir = fontsDir.replace(/\\/g, '/').replace(/'/g, "\\'").replace(/:/g, '\\:');
-  const fontfile = `${escapedFontsDir}/${fontName}.ttf`;
+  const boldFontFile   = `${escapedFontsDir}/${fontName}-Bold.ttf`;
+  const regularFontFile = `${escapedFontsDir}/${fontName}.ttf`;
+
+  // Проверяем наличие Bold-варианта синхронно (fs-extra)
+  let fontfile = regularFontFile;
+  try {
+    if (bold && require('fs').existsSync(boldFontFile.replace(/\\\\/g, '\\').replace(/\\:/g, ':'))) {
+      fontfile = boldFontFile;
+    }
+  } catch (_) { /* используем обычный */ }
 
   const drawtextArgs = [
     `text='${safeText}'`,
     `fontfile='${fontfile}'`,
     `fontsize=${fontSize}`,
     `fontcolor=${fontColor}`,
-    `bold=${bold}`,
     `borderw=${outline}`,
     `bordercolor=black@0.8`,
     `box=1`,
