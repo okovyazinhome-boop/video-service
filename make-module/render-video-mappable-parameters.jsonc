@@ -376,6 +376,22 @@
     "help": "Публичная ссылка на PNG-изображение логотипа для наложения на видео"
   },
   {
+    "name": "logoPosition",
+    "type": "select",
+    "label": "📌 Логотип — позиция",
+    "required": false,
+    "default": "top-right",
+    "options": [
+      { "label": "↖️ Верхний левый", "value": "top-left" },
+      { "label": "⬆️ Верхний центр", "value": "top-center" },
+      { "label": "↗️ Верхний правый (по умолчанию)", "value": "top-right" },
+      { "label": "↙️ Нижний левый", "value": "bottom-left" },
+      { "label": "⬇️ Нижний центр", "value": "bottom-center" },
+      { "label": "↘️ Нижний правый", "value": "bottom-right" }
+    ],
+    "help": "Положение логотипа на видео. По умолчанию — правый верхний угол"
+  },
+  {
     "name": "webhookUrl",
     "type": "url",
     "label": "🔔 Webhook URL",

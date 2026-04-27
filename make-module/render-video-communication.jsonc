@@ -13,6 +13,7 @@
       "transitionType": "{{if(parameters.transitionType, parameters.transitionType, 'fade')}}",
       "resolution": "{{if(parameters.resolution, parameters.resolution, '1080x1920')}}",
       "logoUrl": "{{if(parameters.logoUrl, parameters.logoUrl, omit)}}",
+      "logoPosition": "{{if(parameters.logoPosition, parameters.logoPosition, 'top-right')}}",
       "webhookUrl": "{{if(parameters.webhookUrl, parameters.webhookUrl, omit)}}",
       "subtitleStyle": {
         "mode": "{{if(parameters.subtitleMode, parameters.subtitleMode, 'word-highlight')}}",

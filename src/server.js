@@ -864,7 +864,9 @@ function buildHighlightedPhraseText(tokens, activeIndex, maxCharsPerLine = 28) {
       line
         .map((token) => {
           if (token.index === activeIndex) {
-            return `{\\rActiveWord}${token.text}{\\rDefault}`;
+            // \rActiveWord переключает стиль (цвет обводки = glow-цвет, Outline = большой)
+            // \blur добавляет мягкое размытие ореола → эффект свечения без острых углов
+            return `{\\rActiveWord\\blur4}${token.text}{\\rDefault\\blur0}`;
           }
           return token.text;
         })
@@ -1266,10 +1268,10 @@ function buildAssContent({
       )
     : phraseEvents;
 
-  // Padding активного блока — пропорционально шрифту, создаёт визуальный эффект скругления
-  const activeBoxPad = Math.round(fontSize * 0.22);
-  // Shadow того же цвета = тень расширяет блок во все стороны → скруглённый вид
-  const activeBoxShadow = Math.round(activeBoxPad * 0.55);
+  // Glow-эффект активного слова: толстая обводка цветом фона + blur → мягкое свечение
+  // BorderStyle: 1 (обычная обводка), Outline = большой → цветной ореол вокруг слова
+  const activeGlowBord = Math.round(fontSize * 0.38); // толщина ореола
+  const activeGlowBlur = Math.round(fontSize * 0.25); // размытие ореола
 
   return `[Script Info]
 ScriptType: v4.00+
@@ -1281,7 +1283,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
-Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,${activeBoxPad},${activeBoxShadow},${alignment},${marginL},${marginR},${marginV},1
+Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},&H00000000,${bold},0,0,0,100,100,0,0,1,${activeGlowBord},0,${alignment},${marginL},${marginR},${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -1513,16 +1515,43 @@ async function _processJobInner(jobId) {
       finalVideoLabel = subtitleVideoLabel;
     }
 
-    // Логотип: накладываем в правый верхний угол с отступом 2% от ширины
+    // Логотип: накладываем в выбранную позицию (по умолчанию правый верхний угол)
     if (logoPath && logoInputIndex !== null) {
-      const logoMargin = Math.round(width * 0.02);
+      const logoMargin = Math.round(width * 0.03);
       const logoMaxW = Math.round(width * 0.20); // не больше 20% ширины
       const logoLabel = 'vlogo';
+      const logoPosition = String(job.payload.logoPosition || 'top-right').toLowerCase();
+
+      let logoX, logoY;
+      if (logoPosition === 'top-left') {
+        logoX = `${logoMargin}`;
+        logoY = `${logoMargin}`;
+      } else if (logoPosition === 'top-center') {
+        logoX = `(W-w)/2`;
+        logoY = `${logoMargin}`;
+      } else if (logoPosition === 'top-right') {
+        logoX = `W-w-${logoMargin}`;
+        logoY = `${logoMargin}`;
+      } else if (logoPosition === 'bottom-left') {
+        logoX = `${logoMargin}`;
+        logoY = `H-h-${logoMargin}`;
+      } else if (logoPosition === 'bottom-center') {
+        logoX = `(W-w)/2`;
+        logoY = `H-h-${logoMargin}`;
+      } else if (logoPosition === 'bottom-right') {
+        logoX = `W-w-${logoMargin}`;
+        logoY = `H-h-${logoMargin}`;
+      } else {
+        // fallback: top-right
+        logoX = `W-w-${logoMargin}`;
+        logoY = `${logoMargin}`;
+      }
+
       filterParts.push(
         `[${logoInputIndex}:v]scale=${logoMaxW}:-1:force_original_aspect_ratio=decrease[logoScaled]`
       );
       filterParts.push(
-        `[${finalVideoLabel}][logoScaled]overlay=x=W-w-${logoMargin}:y=${logoMargin}:format=auto[${logoLabel}]`
+        `[${finalVideoLabel}][logoScaled]overlay=x=${logoX}:y=${logoY}:format=auto[${logoLabel}]`
       );
       finalVideoLabel = logoLabel;
     }
@@ -1617,6 +1646,7 @@ app.post('/render', authMiddleware, (req, res) => {
     subtitleStyle = {},
     overlayStyle = {},
     logoUrl = '',
+    logoPosition = 'top-right',
     wordTimings = [],
     webhookUrl = ''
   } = req.body || {};
@@ -1655,6 +1685,7 @@ app.post('/render', authMiddleware, (req, res) => {
       subtitleStyle,
       overlayStyle,
       logoUrl,
+      logoPosition: String(logoPosition || 'top-right').trim(),
       wordTimings,
       webhookUrl: String(webhookUrl || '').trim()
     },
