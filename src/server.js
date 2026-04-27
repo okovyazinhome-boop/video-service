@@ -914,6 +914,54 @@ function normalizeWordTimings(wordTimings = []) {
     .sort((a, b) => a.start - b.start);
 }
 
+/**
+ * Автоматическая генерация wordTimings по тексту и длительности аудио.
+ * Используется как fallback, когда внешний сервис (Kie AI / ElevenLabs)
+ * не вернул таймкоды. Распределяет время пропорционально длине слов.
+ */
+function generateWordTimingsFromDuration(text, duration) {
+  if (!text || !duration || duration <= 0) return [];
+
+  const words = text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (!words.length) return [];
+
+  // Оставляем небольшие отступы: 0.1с в начале, 0.3с в конце
+  const startOffset = 0.1;
+  const endOffset = 0.3;
+  const usableDuration = Math.max(0.5, duration - startOffset - endOffset);
+
+  // Длина каждого слова (в символах) определяет долю времени
+  const totalChars = words.reduce((sum, w) => sum + w.length, 0);
+  if (totalChars === 0) return [];
+
+  const result = [];
+  let cursor = startOffset;
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    // Пропорционально длине слова + маленький бонус за пунктуацию (паузы)
+    const punctuationBonus = /[.!?…,;:—–]$/.test(word) ? 0.15 : 0;
+    const wordDuration = (word.length / totalChars) * usableDuration + punctuationBonus;
+    const wordEnd = Math.min(cursor + wordDuration, duration);
+
+    result.push({
+      text: word,
+      start: Number(cursor.toFixed(3)),
+      end: Number(wordEnd.toFixed(3))
+    });
+
+    cursor = wordEnd;
+  }
+
+  // Корректировка: последнее слово заканчивается не позже duration - endOffset
+  if (result.length > 0) {
+    result[result.length - 1].end = Number(Math.min(result[result.length - 1].end, duration - endOffset).toFixed(3));
+  }
+
+  console.log(`[Fallback] Generated ${result.length} word timings from text (${duration.toFixed(1)}s audio)`);
+  return result;
+}
+
 function buildPhrasesFromWordTimings(wordTimings, subtitleStyle = {}) {
   const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
   const maxLines = Number(subtitleStyle.maxLines) || 2;
@@ -1073,6 +1121,13 @@ function buildAssContent({
   }
 
 
+
+  // Нормализуем wordTimings или генерируем fallback по длительности аудио
+  let normalizedWordTimings = normalizeWordTimings(wordTimings);
+  if (!normalizedWordTimings.length && subtitlesText && duration > 0) {
+    // Fallback: автоматическая генерация таймкодов по тексту и длительности
+    normalizedWordTimings = generateWordTimingsFromDuration(subtitlesText, duration);
+  }
 
   const phraseEvents = scenePlan.length > 0
     ? buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle)
