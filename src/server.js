@@ -1210,11 +1210,18 @@ function buildSceneDrawtextFilter(text, inputLabel, outputLabel, overlayStyle, w
  * Режим single-word: каждое слово показывается отдельно по центру/снизу экрана.
  * Использует стиль ActiveWord для всех событий (цветной блок под словом).
  */
-function buildSingleWordEvents(timingsOrPhraseEvents, subtitleStyle = {}, hasRealTimings = false) {
+function buildSingleWordEvents(timingsOrPhraseEvents, subtitleStyle = {}, hasRealTimings = false, highlightKeywords = new Set()) {
   const events = [];
 
+  // Определяем стиль для слова: keyword → KeyWord, иначе → ActiveWord
+  function wordStyle(rawText) {
+    const clean = rawText.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '').trim();
+    return highlightKeywords.size > 0 && highlightKeywords.has(clean)
+      ? `{\\rKeyWord}${sanitizeAssText(rawText)}{\\rDefault}`
+      : `{\\rActiveWord}${sanitizeAssText(rawText)}{\\rDefault}`;
+  }
+
   if (hasRealTimings) {
-    // timingsOrPhraseEvents — массив {text, start, end}
     const normalized = normalizeWordTimings(timingsOrPhraseEvents);
     for (let i = 0; i < normalized.length; i++) {
       const word = normalized[i];
@@ -1222,11 +1229,10 @@ function buildSingleWordEvents(timingsOrPhraseEvents, subtitleStyle = {}, hasRea
       events.push({
         start: word.start,
         end: next ? Math.min(word.end, next.start) : word.end,
-        text: `{\\rActiveWord}${sanitizeAssText(word.text)}{\\rDefault}`
+        text: wordStyle(word.text)
       });
     }
   } else {
-    // timingsOrPhraseEvents — phraseEvents [{start, end, rawText}]
     for (const phrase of timingsOrPhraseEvents) {
       const tokens = tokenizeWords(phrase.rawText || '');
       if (!tokens.length) continue;
@@ -1245,7 +1251,7 @@ function buildSingleWordEvents(timingsOrPhraseEvents, subtitleStyle = {}, hasRea
         events.push({
           start: cursor,
           end: isLast ? phrase.end : cursor + wordDuration,
-          text: `{\\rActiveWord}${sanitizeAssText(tokens[i].text)}{\\rDefault}`
+          text: wordStyle(tokens[i].text)
         });
 
         cursor += wordDuration;
@@ -1349,7 +1355,7 @@ function buildAssContent({
         ? buildWordHighlightEventsFromWordTimings(normalizedWordTimings, subtitleStyle, highlightKeywords)
         : buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle, highlightKeywords))
     : subtitleMode === 'single-word'
-    ? buildSingleWordEvents(normalizedWordTimings.length ? normalizedWordTimings : phraseEvents, subtitleStyle, !!normalizedWordTimings.length)
+    ? buildSingleWordEvents(normalizedWordTimings.length ? normalizedWordTimings : phraseEvents, subtitleStyle, !!normalizedWordTimings.length, highlightKeywords)
     : phraseEvents;
 
   // Прямоугольный блок активного слова
