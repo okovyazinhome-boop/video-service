@@ -235,10 +235,10 @@ function normalizeMediaItems(payload = {}) {
     // images может быть массивом строк (URL) или объектов {url, overlayText}
     return payload.images.map((item) => {
       if (typeof item === 'string') {
-        return { type: 'image', url: item, narrationText: '', sceneRole: '', overlayText: '' };
+        return { type: guessMediaTypeFromUrl(item), url: item, narrationText: '', sceneRole: '', overlayText: '' };
       }
       return {
-        type: item.type || 'image',
+        type: item.type || guessMediaTypeFromUrl(item.url || ''),
         url: item.url || item,
         narrationText: String(item.narrationText || '').trim(),
         sceneRole: String(item.sceneRole || '').trim(),
