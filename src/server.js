@@ -1301,14 +1301,16 @@ function buildAssContent({
   const outlineColour = assColorFromHex(subtitleStyle.outlineColor || '#000000', '&H00000000');
   const backColour = assColorFromHex(subtitleStyle.backColor || '#000000', '&H00000000');
 
-  // Цвета активного слова — только для word-highlight и single-word режимов
-  const needsActiveWord = subtitleMode === 'word-highlight' || isSingleWord;
-  const activeWordTextColour = needsActiveWord
+  // Цвета активного слова
+  // word-highlight: фоновый блок (дефолт фиолетовый)
+  // single-word: без фонового блока (дефолт прозрачный), слово просто крупное
+  // phrase: не используется
+  const activeWordTextColour = (subtitleMode === 'word-highlight' || isSingleWord)
     ? assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF')
     : assColorFromHex('#FFFFFF', '&H00FFFFFF');
-  const activeWordBackColour = needsActiveWord
+  const activeWordBackColour = subtitleMode === 'word-highlight'
     ? assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B')
-    : assColorFromHex('#00000000', '&H00000000');
+    : assColorFromHex('#00000000', '&H00000000'); // single-word и phrase — прозрачный
   const keywordColour = assColorFromHex(subtitleStyle.keywordColor || '#FFD700', '&H0000D7FF');
 
   // Пробрасываем вычисленный maxCharsPerLine в subtitleStyle если не задан вручную
@@ -1350,9 +1352,13 @@ function buildAssContent({
     ? buildSingleWordEvents(normalizedWordTimings.length ? normalizedWordTimings : phraseEvents, subtitleStyle, !!normalizedWordTimings.length)
     : phraseEvents;
 
-  // Прямоугольный блок активного слова (BorderStyle:3 = opaque box)
-  // Padding пропорционален шрифту для визуального комфорта
+  // Прямоугольный блок активного слова
+  // word-highlight: BorderStyle:3 (opaque box) с цветным фоном
+  // single-word/phrase: BorderStyle:1 (outline only) без фонового блока
   const activeBoxPad = Math.round(fontSize * 0.20);
+  const activeBorderStyle = subtitleMode === 'word-highlight' ? 3 : 1;
+  const activeOutline = subtitleMode === 'word-highlight' ? activeBoxPad : outline;
+  const activeShadow = subtitleMode === 'word-highlight' ? 0 : shadow;
 
   return `[Script Info]
 ScriptType: v4.00+
@@ -1364,7 +1370,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
-Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,${activeBoxPad},0,${alignment},${marginL},${marginR},${marginV},1
+Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,${activeBorderStyle},${activeOutline},${activeShadow},${alignment},${marginL},${marginR},${marginV},1
 Style: KeyWord,${fontName},${fontSize},${keywordColour},${keywordColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
 
 [Events]
