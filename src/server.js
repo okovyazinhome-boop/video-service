@@ -1366,25 +1366,30 @@ ${events.map((e) => `Dialogue: 0,${formatAssTime(e.start)},${formatAssTime(e.end
 }
 
 /**
- * Удаляет встроенные видеопотоки (cover art) из аудиофайла.
- * MP3 от ElevenLabs и других TTS часто содержат обложку в ID3-тегах.
- * FFmpeg 5.1 видит её как видеопоток и путается с -stream_loop.
+ * Подготавливает аудиофайл для FFmpeg pipeline:
+ * 1. Удаляет встроенные видеопотоки (cover art из ID3-тегов)
+ * 2. Перекодирует в MP3 для совместимости с -stream_loop (FFmpeg 5.1
+ *    не поддерживает -stream_loop для M4A/MP4 контейнеров)
  *
- * Решение: перезаписать файл, явно выбрав ТОЛЬКО аудиопоток:
- *   ffmpeg -i input -map 0:a:0 -c copy output
- * -map 0:a:0 = из входа #0 взять только первый аудиопоток, проигнорировать всё остальное.
+ * Без этого шага FFmpeg падает с "Option loop not found" если аудио
+ * в M4A-контейнере или содержит cover art неизвестного типа.
  */
-async function stripCoverArt(filePath) {
-  const ext = path.extname(filePath) || '.mp3';
-  const tmpPath = filePath + '.clean' + ext;
+async function prepareAudioFile(filePath) {
+  const cleanPath = filePath + '.prepared.mp3';
   try {
-    // -map_metadata -1 также убирает проблемные метаданные которые могут содержать cover art ссылки
-    await runFfmpeg(['-y', '-i', filePath, '-map', '0:a:0', '-c', 'copy', '-map_metadata', '-1', tmpPath]);
-    await fs.move(tmpPath, filePath, { overwrite: true });
-    console.log(`[stripCoverArt] Cleaned: ${path.basename(filePath)}`);
+    await runFfmpeg([
+      '-y', '-i', filePath,
+      '-map', '0:a:0',           // только первый аудиопоток (без cover art)
+      '-c:a', 'libmp3lame',      // перекодировать в MP3
+      '-q:a', '2',               // высокое качество (~190 kbps VBR)
+      '-map_metadata', '-1',     // убрать все метаданные
+      cleanPath
+    ]);
+    await fs.move(cleanPath, filePath, { overwrite: true });
+    console.log(`[prepareAudio] Converted to clean MP3: ${path.basename(filePath)}`);
   } catch (e) {
-    await fs.remove(tmpPath).catch(() => {});
-    console.warn(`[stripCoverArt] ${e.message} — using original file`);
+    await fs.remove(cleanPath).catch(() => {});
+    console.warn(`[prepareAudio] ${e.message} — using original file`);
   }
 }
 
@@ -1449,11 +1454,11 @@ async function _processJobInner(jobId) {
     }
 
     await downloadToFile(voiceUrl, voicePath);
-    await stripCoverArt(voicePath);
+    await prepareAudioFile(voicePath);
 
     if (musicUrl && musicPath) {
       await downloadToFile(musicUrl, musicPath);
-      await stripCoverArt(musicPath);
+      await prepareAudioFile(musicPath);
     }
 
     const voiceDuration = await getMediaDuration(voicePath);
@@ -1509,7 +1514,7 @@ async function _processJobInner(jobId) {
       }
     }
 
-    // Cover art уже удалён stripCoverArt() — безопасно подавать как обычный аудио-вход
+    // Cover art уже удалён prepareAudioFile() — безопасно подавать как обычный аудио-вход
     ffmpegArgs.push('-i', voicePath);
 
     const voiceInputIndex = scenePlan.length;
