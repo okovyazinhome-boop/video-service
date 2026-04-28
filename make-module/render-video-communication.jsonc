@@ -17,6 +17,7 @@
       "webhookUrl": "{{if(parameters.webhookUrl, parameters.webhookUrl, omit)}}",
       "subtitleStyle": {
         "mode": "{{if(parameters.subtitleMode, parameters.subtitleMode, 'word-highlight')}}",
+        "position": "{{if(parameters.subtitlePosition, parameters.subtitlePosition, 'bottom')}}",
         "animation": "{{if(parameters.subtitleAnimation, parameters.subtitleAnimation, 'fade')}}",
         "fontName": "{{if(parameters.fontName, parameters.fontName, 'Inter')}}",
         "fontSize": "{{if(parameters.fontSize, parameters.fontSize, omit)}}",
@@ -24,6 +25,7 @@
         "outlineColor": "{{ifempty(parameters.outlineColor, '#000000')}}",
         "activeWordTextColor": "{{ifempty(parameters.activeWordTextColor, '#FFFFFF')}}",
         "activeWordBackColor": "{{ifempty(parameters.activeWordBackColor, '#8B5CF6')}}",
+        "keywordColor": "{{ifempty(parameters.keywordColor, '#FFD700')}}",
         "bold": "{{if(parameters.bold !== undefined, parameters.bold, true)}}",
         "motionPreset": "{{if(parameters.motionPreset && parameters.motionPreset !== 'auto', parameters.motionPreset, omit)}}"
       },
@@ -87,6 +89,7 @@
         "jobId": "{{body.jobId}}",
         "status": "{{body.status}}",
         "videoUrl": "{{body.videoUrl}}",
+        "thumbnailUrl": "{{body.thumbnailUrl}}",
         "error": "{{body.error}}"
       }
     }

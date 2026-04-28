@@ -28,6 +28,7 @@ setInterval(async () => {
         (now - new Date(job.createdAt).getTime()) > JOB_TTL_MS) {
       await fs.remove(path.join('storage', 'jobs', jobId)).catch(() => {});
       await fs.remove(path.join('storage', 'output', `${jobId}.mp4`)).catch(() => {});
+      await fs.remove(path.join('storage', 'output', `${jobId}.jpg`)).catch(() => {});
       jobs.delete(jobId);
       console.log(`[TTL] Cleaned up job ${jobId}`);
     }
@@ -41,6 +42,7 @@ async function sendWebhook(job) {
       jobId: job.jobId,
       status: job.status,
       videoUrl: job.videoUrl || null,
+      thumbnailUrl: job.thumbnailUrl || null,
       error: job.error || null
     }, { timeout: 10000 });
   } catch (e) {
@@ -277,6 +279,15 @@ function assColorFromHex(hex, fallback = '&H00FFFFFF') {
   const b = normalized.slice(4, 6);
 
   return `&H00${b}${g}${r}`.toUpperCase();
+}
+
+function parseKeywordsFromText(text) {
+  const keywords = new Set();
+  const cleanText = String(text || '').replace(/\*([^*]+)\*/g, (_, word) => {
+    keywords.add(word.toLowerCase().trim());
+    return word; // убираем звёздочки, слово остаётся
+  });
+  return { cleanText, keywords };
 }
 
 function sanitizeAssText(text) {
@@ -856,7 +867,7 @@ function wrapWordTokens(tokens, maxCharsPerLine = 28) {
   return lines;
 }
 
-function buildHighlightedPhraseText(tokens, activeIndex, maxCharsPerLine = 28) {
+function buildHighlightedPhraseText(tokens, activeIndex, maxCharsPerLine = 28, highlightKeywords = new Set()) {
   const lines = wrapWordTokens(tokens, maxCharsPerLine);
 
   return lines
@@ -866,6 +877,11 @@ function buildHighlightedPhraseText(tokens, activeIndex, maxCharsPerLine = 28) {
           if (token.index === activeIndex) {
             return `{\\rActiveWord}${token.text}{\\rDefault}`;
           }
+          const isKeyword = highlightKeywords.size > 0 &&
+            highlightKeywords.has(token.text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '').trim());
+          if (isKeyword) {
+            return `{\\rKeyWord}${token.text}{\\rDefault}`;
+          }
           return token.text;
         })
         .join(' ')
@@ -873,7 +889,7 @@ function buildHighlightedPhraseText(tokens, activeIndex, maxCharsPerLine = 28) {
     .join('\\N');
 }
 
-function buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle = {}) {
+function buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle = {}, highlightKeywords = new Set()) {
   const maxCharsPerLine = Number(subtitleStyle.maxCharsPerLine) || 28;
   const result = [];
 
@@ -899,7 +915,7 @@ function buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle = 
       result.push({
         start: cursor,
         end: isLast ? Number(phraseEvent.end) : cursor + wordDuration,
-        text: buildHighlightedPhraseText(tokens, i, maxCharsPerLine)
+        text: buildHighlightedPhraseText(tokens, i, maxCharsPerLine, highlightKeywords)
       });
 
       cursor += wordDuration;
@@ -1011,7 +1027,7 @@ function buildPhrasesFromWordTimings(wordTimings, subtitleStyle = {}) {
   return phrases;
 }
 
-function buildWordHighlightEventsFromWordTimings(wordTimings, subtitleStyle = {}) {
+function buildWordHighlightEventsFromWordTimings(wordTimings, subtitleStyle = {}, highlightKeywords = new Set()) {
   const normalized = normalizeWordTimings(wordTimings);
   if (!normalized.length) return [];
 
@@ -1037,7 +1053,7 @@ function buildWordHighlightEventsFromWordTimings(wordTimings, subtitleStyle = {}
       events.push({
         start,
         end,
-        text: buildHighlightedPhraseText(phraseTokens, i, maxCharsPerLine)
+        text: buildHighlightedPhraseText(phraseTokens, i, maxCharsPerLine, highlightKeywords)
       });
     }
   }
@@ -1188,6 +1204,56 @@ function buildSceneDrawtextFilter(text, inputLabel, outputLabel, overlayStyle, w
   return `[${inputLabel}]drawtext=${drawtextArgs}[${outputLabel}]`;
 }
 
+/**
+ * Режим single-word: каждое слово показывается отдельно по центру/снизу экрана.
+ * Использует стиль ActiveWord для всех событий (цветной блок под словом).
+ */
+function buildSingleWordEvents(timingsOrPhraseEvents, subtitleStyle = {}, hasRealTimings = false) {
+  const events = [];
+
+  if (hasRealTimings) {
+    // timingsOrPhraseEvents — массив {text, start, end}
+    const normalized = normalizeWordTimings(timingsOrPhraseEvents);
+    for (let i = 0; i < normalized.length; i++) {
+      const word = normalized[i];
+      const next = normalized[i + 1];
+      events.push({
+        start: word.start,
+        end: next ? Math.min(word.end, next.start) : word.end,
+        text: `{\\rActiveWord}${sanitizeAssText(word.text)}{\\rDefault}`
+      });
+    }
+  } else {
+    // timingsOrPhraseEvents — phraseEvents [{start, end, rawText}]
+    for (const phrase of timingsOrPhraseEvents) {
+      const tokens = tokenizeWords(phrase.rawText || '');
+      if (!tokens.length) continue;
+
+      const totalDuration = Math.max(0.1, phrase.end - phrase.start);
+      const weights = tokens.map(t => Math.max(1, t.text.replace(/[^\p{L}\p{N}]+/gu, '').length));
+      const totalWeight = weights.reduce((s, v) => s + v, 0) || 1;
+      let cursor = phrase.start;
+
+      for (let i = 0; i < tokens.length; i++) {
+        const isLast = i === tokens.length - 1;
+        const wordDuration = isLast
+          ? Math.max(0.05, phrase.end - cursor)
+          : totalDuration * (weights[i] / totalWeight);
+
+        events.push({
+          start: cursor,
+          end: isLast ? phrase.end : cursor + wordDuration,
+          text: `{\\rActiveWord}${sanitizeAssText(tokens[i].text)}{\\rDefault}`
+        });
+
+        cursor += wordDuration;
+      }
+    }
+  }
+
+  return events;
+}
+
 function buildAssContent({
   width,
   height,
@@ -1198,8 +1264,18 @@ function buildAssContent({
   wordTimings = []
 }) {
   const fontName = subtitleStyle.fontName || 'Inter';
-  const fontSize = Number(subtitleStyle.fontSize || Math.max(24, Math.round(height * 0.026)));
-  const marginV = Number(subtitleStyle.marginV || Math.round(height * 0.11));
+  const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
+  const isSingleWord = subtitleMode === 'single-word';
+  const fontSize = Number(subtitleStyle.fontSize || Math.max(24, Math.round(height * (isSingleWord ? 0.07 : 0.026))));
+
+  const subtitlePosition = String(subtitleStyle.position || 'bottom').toLowerCase();
+  let marginV = Number(subtitleStyle.marginV || 0);
+  if (!subtitleStyle.marginV) {
+    if (subtitlePosition === 'center') marginV = Math.round(height * 0.40);
+    else if (subtitlePosition === 'top') marginV = Math.round(height * 0.08);
+    else marginV = Math.round(height * 0.11); // bottom default
+  }
+
   const outline = Number(subtitleStyle.outline || 2);
   const shadow = Number(subtitleStyle.shadow || 0);
   const bold = subtitleStyle.bold === false ? 0 : 1;
@@ -1224,7 +1300,7 @@ function buildAssContent({
 
   const activeWordTextColour = assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF');
   const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B');
-  const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
+  const keywordColour = assColorFromHex(subtitleStyle.keywordColor || '#FFD700', '&H0000D7FF');
 
   // Пробрасываем вычисленный maxCharsPerLine в subtitleStyle если не задан вручную
   if (!subtitleStyle.maxCharsPerLine) {
@@ -1239,31 +1315,34 @@ function buildAssContent({
     animTag = '{\\fad(80,100)\\t(0,120,\\fscx110\\fscy110)\\t(120,220,\\fscx100\\fscy100)}';
   } else if (subtitleAnimation === 'slide-up') {
     animTag = '{\\move(540,1080,540,960,0,200)}';
+  } else if (subtitleAnimation === 'bounce') {
+    animTag = '{\\fad(60,80)\\t(0,100,\\fscx115\\fscy115)\\t(100,180,\\fscx95\\fscy95)\\t(180,250,\\fscx102\\fscy102)\\t(250,300,\\fscx100\\fscy100)}';
   }
 
-
+  // Парсим ключевые слова из subtitlesText (паттерн *слово*)
+  const { cleanText: cleanSubtitlesText, keywords: highlightKeywords } = parseKeywordsFromText(subtitlesText);
 
   // Нормализуем wordTimings или генерируем fallback по длительности аудио
   let normalizedWordTimings = normalizeWordTimings(wordTimings);
-  if (!normalizedWordTimings.length && subtitlesText && duration > 0) {
+  if (!normalizedWordTimings.length && cleanSubtitlesText && duration > 0) {
     // Fallback: автоматическая генерация таймкодов по тексту и длительности
-    normalizedWordTimings = generateWordTimingsFromDuration(subtitlesText, duration);
+    normalizedWordTimings = generateWordTimingsFromDuration(cleanSubtitlesText, duration);
   }
 
   const phraseEvents = scenePlan.length > 0
     ? buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle)
     : buildTimedDialogueEvents({
-        subtitlesText,
+        subtitlesText: cleanSubtitlesText,
         duration,
         subtitleStyle
       });
 
   const events = subtitleMode === 'word-highlight'
-    ? (
-        normalizedWordTimings.length
-          ? buildWordHighlightEventsFromWordTimings(normalizedWordTimings, subtitleStyle)
-          : buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle)
-      )
+    ? (normalizedWordTimings.length
+        ? buildWordHighlightEventsFromWordTimings(normalizedWordTimings, subtitleStyle, highlightKeywords)
+        : buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle, highlightKeywords))
+    : subtitleMode === 'single-word'
+    ? buildSingleWordEvents(normalizedWordTimings.length ? normalizedWordTimings : phraseEvents, subtitleStyle, !!normalizedWordTimings.length)
     : phraseEvents;
 
   // Прямоугольный блок активного слова (BorderStyle:3 = opaque box)
@@ -1281,10 +1360,11 @@ WrapStyle: 2
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
 Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,3,${activeBoxPad},0,${alignment},${marginL},${marginR},${marginV},1
+Style: KeyWord,${fontName},${fontSize},${keywordColour},${keywordColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-${events.map((event) => `Dialogue: 0,${formatAssTime(event.start)},${formatAssTime(event.end)},Default,,0,0,0,,${animTag}${event.text}`).join('\n')}
+${events.map((e) => `Dialogue: 0,${formatAssTime(e.start)},${formatAssTime(e.end)},Default,,0,0,0,,${animTag}${e.text}`).join('\n')}
 `;
 }
 
@@ -1591,6 +1671,24 @@ async function _processJobInner(jobId) {
 
     await runFfmpeg(ffmpegArgs);
 
+    // Генерируем thumbnail — первый кадр видео (320px по ширине)
+    const thumbnailPath = path.join(process.cwd(), 'storage', 'output', `${jobId}.jpg`);
+    try {
+      await runFfmpeg([
+        '-y',
+        '-ss', '0',
+        '-i', outputPath,
+        '-vframes', '1',
+        '-q:v', '2',
+        '-vf', 'scale=320:-1',
+        thumbnailPath
+      ]);
+      job.thumbnailUrl = `${BASE_URL}/output/${jobId}.jpg`;
+    } catch (e) {
+      console.warn(`Thumbnail generation failed: ${e.message}`);
+      job.thumbnailUrl = null;
+    }
+
     job.status = 'done';
     job.videoUrl = `${BASE_URL}/output/${jobId}.mp4`;
     job.error = null;
@@ -1687,6 +1785,7 @@ app.post('/render', authMiddleware, (req, res) => {
       webhookUrl: String(webhookUrl || '').trim()
     },
     videoUrl: null,
+    thumbnailUrl: null,
     error: null
   });
 
@@ -1737,6 +1836,7 @@ app.get('/result/:jobId', authMiddleware, (req, res) => {
     jobId: job.jobId,
     status: job.status,
     videoUrl: job.videoUrl,
+    thumbnailUrl: job.thumbnailUrl || null,
     error: job.error
   });
 });
