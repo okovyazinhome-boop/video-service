@@ -1261,7 +1261,8 @@ function buildAssContent({
   subtitlesText,
   subtitleStyle = {},
   scenePlan = [],
-  wordTimings = []
+  wordTimings = [],
+  highlightKeywords = new Set()
 }) {
   const fontName = subtitleStyle.fontName || 'Inter';
   const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
@@ -1319,20 +1320,16 @@ function buildAssContent({
     animTag = '{\\fad(60,80)\\t(0,100,\\fscx115\\fscy115)\\t(100,180,\\fscx95\\fscy95)\\t(180,250,\\fscx102\\fscy102)\\t(250,300,\\fscx100\\fscy100)}';
   }
 
-  // Парсим ключевые слова из subtitlesText (паттерн *слово*)
-  const { cleanText: cleanSubtitlesText, keywords: highlightKeywords } = parseKeywordsFromText(subtitlesText);
-
   // Нормализуем wordTimings или генерируем fallback по длительности аудио
   let normalizedWordTimings = normalizeWordTimings(wordTimings);
-  if (!normalizedWordTimings.length && cleanSubtitlesText && duration > 0) {
-    // Fallback: автоматическая генерация таймкодов по тексту и длительности
-    normalizedWordTimings = generateWordTimingsFromDuration(cleanSubtitlesText, duration);
+  if (!normalizedWordTimings.length && subtitlesText && duration > 0) {
+    normalizedWordTimings = generateWordTimingsFromDuration(subtitlesText, duration);
   }
 
   const phraseEvents = scenePlan.length > 0
     ? buildTimedDialogueEventsFromScenePlan(scenePlan, subtitleStyle)
     : buildTimedDialogueEvents({
-        subtitlesText: cleanSubtitlesText,
+        subtitlesText,
         duration,
         subtitleStyle
       });
@@ -1384,7 +1381,8 @@ async function _processJobInner(jobId) {
     const musicVolume = Number(job.payload.musicVolume ?? 0.15);
     const transitionType = getAllowedTransition(job.payload.transitionType);
     const { width, height } = parseResolution(job.payload.resolution);
-    const subtitlesText = String(job.payload.subtitlesText || '').trim();
+    // Парсим *ключевые слова* из оригинального текста ДО очистки
+    const { cleanText: subtitlesText, keywords: highlightKeywords } = parseKeywordsFromText(String(job.payload.subtitlesText || '').trim());
     const subtitleStyle = job.payload.subtitleStyle || {};
     const overlayStyle = job.payload.overlayStyle || {};
     const wordTimings = Array.isArray(job.payload.wordTimings) ? job.payload.wordTimings : [];
@@ -1464,7 +1462,8 @@ async function _processJobInner(jobId) {
         subtitlesText,
         subtitleStyle,
         scenePlan,
-        wordTimings
+        wordTimings,
+        highlightKeywords
       });
 
       await fs.writeFile(subtitlesPath, assContent, 'utf8');
@@ -1480,11 +1479,14 @@ async function _processJobInner(jobId) {
           '-i', scene.localPath
         );
       } else {
+        // Видеоклип: явно указываем только видеопоток (-vn не нужен, но убираем лишние потоки через map)
         ffmpegArgs.push('-i', scene.localPath);
       }
     }
 
-    ffmpegArgs.push('-i', voicePath);
+    // -vn игнорирует cover art (картинку в ID3-тегах MP3) — без него FFmpeg падает с "Option loop not found"
+    // когда голосовой MP3 содержит обложку альбома
+    ffmpegArgs.push('-vn', '-i', voicePath);
 
     const voiceInputIndex = scenePlan.length;
     let musicInputIndex = null;
@@ -1493,7 +1495,7 @@ async function _processJobInner(jobId) {
     if (musicUrl && musicPath) {
       ffmpegArgs.push(
         '-stream_loop', '-1',
-        '-i', musicPath
+        '-vn', '-i', musicPath
       );
       musicInputIndex = scenePlan.length + 1;
     }
