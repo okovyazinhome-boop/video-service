@@ -1377,6 +1377,17 @@ ${events.map((e) => `Dialogue: 0,${formatAssTime(e.start)},${formatAssTime(e.end
 async function prepareAudioFile(filePath) {
   const cleanPath = filePath + '.prepared.mp3';
 
+  // Проверяем формат входного файла
+  try {
+    const { stdout: probeOut } = await runCommand('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=format_name',
+      '-of', 'default=noprint_wrappers=1:nokey=1', filePath
+    ]);
+    console.log(`[prepareAudio] Input format of ${path.basename(filePath)}: "${probeOut.trim()}"`);
+  } catch (pe) {
+    console.warn(`[prepareAudio] Probe failed: ${pe.message}`);
+  }
+
   // Стратегия 1: -map 0:a:0 — извлечь только первый аудиопоток, перекодировать в MP3
   try {
     await runFfmpeg([
@@ -1387,15 +1398,22 @@ async function prepareAudioFile(filePath) {
       '-map_metadata', '-1',
       cleanPath
     ]);
-    await fs.move(cleanPath, filePath, { overwrite: true });
-    console.log(`[prepareAudio] Strategy 1 OK (map 0:a:0): ${path.basename(filePath)}`);
-    return;
+    if (await fs.pathExists(cleanPath)) {
+      const stat = await fs.stat(cleanPath);
+      if (stat.size > 1000) {
+        await fs.move(cleanPath, filePath, { overwrite: true });
+        console.log(`[prepareAudio] Strategy 1 OK (map 0:a:0): ${path.basename(filePath)}, size=${stat.size}`);
+        return;
+      }
+      console.warn(`[prepareAudio] Strategy 1 output too small: ${stat.size} bytes`);
+    }
+    await fs.remove(cleanPath).catch(() => {});
   } catch (e1) {
     await fs.remove(cleanPath).catch(() => {});
     console.warn(`[prepareAudio] Strategy 1 failed: ${e1.message}`);
   }
 
-  // Стратегия 2: -vn (без видео) + перекодирование — для файлов где -map не работает
+  // Стратегия 2: -vn (без видео) + перекодирование
   try {
     await runFfmpeg([
       '-y', '-i', filePath,
@@ -1405,19 +1423,23 @@ async function prepareAudioFile(filePath) {
       '-map_metadata', '-1',
       cleanPath
     ]);
-    await fs.move(cleanPath, filePath, { overwrite: true });
-    console.log(`[prepareAudio] Strategy 2 OK (-vn): ${path.basename(filePath)}`);
-    return;
+    if (await fs.pathExists(cleanPath)) {
+      const stat = await fs.stat(cleanPath);
+      if (stat.size > 1000) {
+        await fs.move(cleanPath, filePath, { overwrite: true });
+        console.log(`[prepareAudio] Strategy 2 OK (-vn): ${path.basename(filePath)}, size=${stat.size}`);
+        return;
+      }
+    }
+    await fs.remove(cleanPath).catch(() => {});
   } catch (e2) {
     await fs.remove(cleanPath).catch(() => {});
     console.warn(`[prepareAudio] Strategy 2 failed: ${e2.message}`);
   }
 
-  // Стратегия 3: raw PCM pipe — декодировать аудио в WAV, затем перекодировать в MP3
-  // Обходит любые проблемы с контейнером/метаданными
+  // Стратегия 3: через промежуточный WAV
   const rawPath = filePath + '.raw.wav';
   try {
-    // Шаг 1: извлечь сырой PCM/WAV (игнорируя все стримы кроме аудио)
     await runFfmpeg([
       '-y', '-i', filePath,
       '-vn', '-dn', '-sn',
@@ -1425,7 +1447,6 @@ async function prepareAudioFile(filePath) {
       '-ar', '44100', '-ac', '2',
       rawPath
     ]);
-    // Шаг 2: перекодировать WAV в MP3
     await runFfmpeg([
       '-y', '-i', rawPath,
       '-c:a', 'libmp3lame',
@@ -1433,17 +1454,30 @@ async function prepareAudioFile(filePath) {
       cleanPath
     ]);
     await fs.remove(rawPath).catch(() => {});
-    await fs.move(cleanPath, filePath, { overwrite: true });
-    console.log(`[prepareAudio] Strategy 3 OK (via WAV): ${path.basename(filePath)}`);
-    return;
+    if (await fs.pathExists(cleanPath)) {
+      const stat = await fs.stat(cleanPath);
+      if (stat.size > 1000) {
+        await fs.move(cleanPath, filePath, { overwrite: true });
+        console.log(`[prepareAudio] Strategy 3 OK (via WAV): ${path.basename(filePath)}, size=${stat.size}`);
+        return;
+      }
+    }
+    await fs.remove(cleanPath).catch(() => {});
   } catch (e3) {
     await fs.remove(cleanPath).catch(() => {});
     await fs.remove(rawPath).catch(() => {});
     console.warn(`[prepareAudio] Strategy 3 failed: ${e3.message}`);
   }
 
-  // Все стратегии провалились — выбросить ошибку (не оставлять проблемный файл)
-  console.error(`[prepareAudio] ALL strategies failed for ${path.basename(filePath)}`);
+  // Проверяем финальный формат
+  try {
+    const { stdout: finalProbe } = await runCommand('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=format_name',
+      '-of', 'default=noprint_wrappers=1:nokey=1', filePath
+    ]);
+    console.error(`[prepareAudio] ALL strategies failed! File still: "${finalProbe.trim()}" — ${path.basename(filePath)}`);
+  } catch (_) {}
+
   throw new Error(`Cannot prepare audio file: ${path.basename(filePath)} — file may be corrupt or unsupported format`);
 }
 
@@ -1509,6 +1543,15 @@ async function _processJobInner(jobId) {
 
     await downloadToFile(voiceUrl, voicePath);
     await prepareAudioFile(voicePath);
+
+    // Верификация: проверяем что voice — MP3 после подготовки
+    try {
+      const { stdout: vfmt } = await runCommand('ffprobe', [
+        '-v', 'error', '-show_entries', 'format=format_name:stream=codec_type',
+        '-of', 'json', voicePath
+      ]);
+      console.log(`[verify] Voice after prepare: ${vfmt.trim()}`);
+    } catch (_) {}
 
     if (musicUrl && musicPath) {
       await downloadToFile(musicUrl, musicPath);
@@ -1781,6 +1824,9 @@ async function _processJobInner(jobId) {
       '-shortest',
       outputPath
     );
+
+    // Логируем финальную FFmpeg-команду для отладки
+    console.log(`[ffmpeg] Final command: ffmpeg ${ffmpegArgs.join(' ').substring(0, 2000)}`);
 
     await runFfmpeg(ffmpegArgs);
 
