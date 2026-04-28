@@ -18,45 +18,57 @@ COPY . .
 
 RUN mkdir -p storage/jobs storage/temp storage/output storage/fonts
 
-# ── Inter (GitHub rsms/inter — статические TTF) ───────────────────────────────
+# ── Inter (статические TTF из rsms/inter v4.0, папка extras/ttf/) ────────────
+# Family name: "Inter" — libass найдёт по имени "Inter" в ASS файле
 RUN curl -sL "https://github.com/rsms/inter/releases/download/v4.0/Inter-4.0.zip" -o /tmp/inter.zip \
     && unzip -q /tmp/inter.zip -d /tmp/inter \
-    && find /tmp/inter -name "Inter-Regular.ttf" | head -1 | xargs -I{} cp {} storage/fonts/Inter.ttf \
-    && find /tmp/inter -name "Inter-Bold.ttf"    | head -1 | xargs -I{} cp {} storage/fonts/Inter-Bold.ttf \
+    && cp /tmp/inter/extras/ttf/Inter-Regular.ttf storage/fonts/Inter.ttf \
+    && cp /tmp/inter/extras/ttf/Inter-Bold.ttf    storage/fonts/Inter-Bold.ttf \
     && rm -rf /tmp/inter.zip /tmp/inter
 
-# ── Google Fonts — скачиваем файлы напрямую (variable fonts, работают как обычные TTF) ──
-# Roboto
-RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto%5Bwdth%2Cwght%5D.ttf" \
+# ── Google Fonts — СТАТИЧНЫЕ TTF (не variable) ───────────────────────────────
+# Статичные файлы имеют корректный family name без осей [wdth,wght]
+# libass ищет шрифт по family name внутри TTF, а не по имени файла
+
+# Roboto — статичные файлы (family: "Roboto")
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/static/Roboto-Regular.ttf" \
         -o storage/fonts/Roboto.ttf \
-    && cp storage/fonts/Roboto.ttf storage/fonts/Roboto-Bold.ttf
+    && curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/static/Roboto-Bold.ttf" \
+        -o storage/fonts/Roboto-Bold.ttf
 
-# Montserrat
-RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf" \
+# Montserrat — статичные файлы из оригинального репозитория (family: "Montserrat")
+# Файлы google/fonts содержат variable font с family "Montserrat Thin" — libass их не найдёт
+RUN curl -sL "https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Regular.ttf" \
         -o storage/fonts/Montserrat.ttf \
-    && cp storage/fonts/Montserrat.ttf storage/fonts/Montserrat-Bold.ttf
+    && curl -sL "https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Bold.ttf" \
+        -o storage/fonts/Montserrat-Bold.ttf
 
-# Oswald
-RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/Oswald%5Bwght%5D.ttf" \
+# Oswald — статичные файлы (family: "Oswald")
+RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/static/Oswald-Regular.ttf" \
         -o storage/fonts/Oswald.ttf \
-    && cp storage/fonts/Oswald.ttf storage/fonts/Oswald-Bold.ttf
+    && curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/static/Oswald-Bold.ttf" \
+        -o storage/fonts/Oswald-Bold.ttf
 
-# Raleway
-RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/raleway/Raleway%5Bwght%5D.ttf" \
+# Raleway — статичные файлы через Google Fonts CDN (family: "Raleway")
+# Файлы google/fonts содержат только variable font с family "Raleway Thin"
+RUN curl -sL "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaooCP.ttf" \
         -o storage/fonts/Raleway.ttf \
-    && cp storage/fonts/Raleway.ttf storage/fonts/Raleway-Bold.ttf
+    && curl -sL "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pYCP.ttf" \
+        -o storage/fonts/Raleway-Bold.ttf
 
-# Nunito
-RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/Nunito%5Bwght%5D.ttf" \
+# Nunito — статичные файлы через Google Fonts CDN (family: "Nunito")
+# Файлы google/fonts содержат только variable font с family "Nunito ExtraLight"
+RUN curl -sL "https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshRTM.ttf" \
         -o storage/fonts/Nunito.ttf \
-    && cp storage/fonts/Nunito.ttf storage/fonts/Nunito-Bold.ttf
+    && curl -sL "https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDFwmRTM.ttf" \
+        -o storage/fonts/Nunito-Bold.ttf
 
-# Bebas Neue (только Regular)
+# Bebas Neue — только Regular (нет Bold варианта)
 RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf" \
         -o storage/fonts/BebasNeue.ttf \
     && cp storage/fonts/BebasNeue.ttf storage/fonts/BebasNeue-Bold.ttf
 
-# Ubuntu (ufl лицензия, отдельные файлы Regular и Bold)
+# Ubuntu — статичные файлы (ufl лицензия)
 RUN curl -sL "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/Ubuntu-Regular.ttf" \
         -o storage/fonts/Ubuntu.ttf \
     && curl -sL "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/Ubuntu-Bold.ttf" \
