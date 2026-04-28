@@ -284,7 +284,9 @@ function assColorFromHex(hex, fallback = '&H00FFFFFF') {
 function parseKeywordsFromText(text) {
   const keywords = new Set();
   const cleanText = String(text || '').replace(/\*([^*]+)\*/g, (_, word) => {
-    keywords.add(word.toLowerCase().trim());
+    // Очищаем от пунктуации для корректного сравнения с токенами
+    const cleaned = word.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '').trim();
+    if (cleaned) keywords.add(cleaned);
     return word; // убираем звёздочки, слово остаётся
   });
   return { cleanText, keywords };
@@ -1299,8 +1301,14 @@ function buildAssContent({
   const outlineColour = assColorFromHex(subtitleStyle.outlineColor || '#000000', '&H00000000');
   const backColour = assColorFromHex(subtitleStyle.backColor || '#000000', '&H00000000');
 
-  const activeWordTextColour = assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF');
-  const activeWordBackColour = assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B');
+  // Цвета активного слова — только для word-highlight и single-word режимов
+  const needsActiveWord = subtitleMode === 'word-highlight' || isSingleWord;
+  const activeWordTextColour = needsActiveWord
+    ? assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF')
+    : assColorFromHex('#FFFFFF', '&H00FFFFFF');
+  const activeWordBackColour = needsActiveWord
+    ? assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B')
+    : assColorFromHex('#00000000', '&H00000000');
   const keywordColour = assColorFromHex(subtitleStyle.keywordColor || '#FFD700', '&H0000D7FF');
 
   // Пробрасываем вычисленный maxCharsPerLine в subtitleStyle если не задан вручную

@@ -23,8 +23,8 @@
         "fontSize": "{{if(parameters.fontSize, parameters.fontSize, omit)}}",
         "primaryColor": "{{ifempty(parameters.primaryColor, '#FFFFFF')}}",
         "outlineColor": "{{ifempty(parameters.outlineColor, '#000000')}}",
-        "activeWordTextColor": "{{ifempty(parameters.activeWordTextColor, '#FFFFFF')}}",
-        "activeWordBackColor": "{{ifempty(parameters.activeWordBackColor, '#8B5CF6')}}",
+        "activeWordTextColor": "{{if(parameters.activeWordTextColor, parameters.activeWordTextColor, omit)}}",
+        "activeWordBackColor": "{{if(parameters.activeWordBackColor, parameters.activeWordBackColor, omit)}}",
         "keywordColor": "{{ifempty(parameters.keywordColor, '#FFD700')}}",
         "bold": "{{if(parameters.bold !== undefined, parameters.bold, true)}}",
         "motionPreset": "{{if(parameters.motionPreset && parameters.motionPreset !== 'auto', parameters.motionPreset, omit)}}"
