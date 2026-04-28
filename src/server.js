@@ -1376,21 +1376,75 @@ ${events.map((e) => `Dialogue: 0,${formatAssTime(e.start)},${formatAssTime(e.end
  */
 async function prepareAudioFile(filePath) {
   const cleanPath = filePath + '.prepared.mp3';
+
+  // Стратегия 1: -map 0:a:0 — извлечь только первый аудиопоток, перекодировать в MP3
   try {
     await runFfmpeg([
       '-y', '-i', filePath,
-      '-map', '0:a:0',           // только первый аудиопоток (без cover art)
-      '-c:a', 'libmp3lame',      // перекодировать в MP3
-      '-q:a', '2',               // высокое качество (~190 kbps VBR)
-      '-map_metadata', '-1',     // убрать все метаданные
+      '-map', '0:a:0',
+      '-c:a', 'libmp3lame',
+      '-q:a', '2',
+      '-map_metadata', '-1',
       cleanPath
     ]);
     await fs.move(cleanPath, filePath, { overwrite: true });
-    console.log(`[prepareAudio] Converted to clean MP3: ${path.basename(filePath)}`);
-  } catch (e) {
+    console.log(`[prepareAudio] Strategy 1 OK (map 0:a:0): ${path.basename(filePath)}`);
+    return;
+  } catch (e1) {
     await fs.remove(cleanPath).catch(() => {});
-    console.warn(`[prepareAudio] ${e.message} — using original file`);
+    console.warn(`[prepareAudio] Strategy 1 failed: ${e1.message}`);
   }
+
+  // Стратегия 2: -vn (без видео) + перекодирование — для файлов где -map не работает
+  try {
+    await runFfmpeg([
+      '-y', '-i', filePath,
+      '-vn',
+      '-c:a', 'libmp3lame',
+      '-q:a', '2',
+      '-map_metadata', '-1',
+      cleanPath
+    ]);
+    await fs.move(cleanPath, filePath, { overwrite: true });
+    console.log(`[prepareAudio] Strategy 2 OK (-vn): ${path.basename(filePath)}`);
+    return;
+  } catch (e2) {
+    await fs.remove(cleanPath).catch(() => {});
+    console.warn(`[prepareAudio] Strategy 2 failed: ${e2.message}`);
+  }
+
+  // Стратегия 3: raw PCM pipe — декодировать аудио в WAV, затем перекодировать в MP3
+  // Обходит любые проблемы с контейнером/метаданными
+  const rawPath = filePath + '.raw.wav';
+  try {
+    // Шаг 1: извлечь сырой PCM/WAV (игнорируя все стримы кроме аудио)
+    await runFfmpeg([
+      '-y', '-i', filePath,
+      '-vn', '-dn', '-sn',
+      '-acodec', 'pcm_s16le',
+      '-ar', '44100', '-ac', '2',
+      rawPath
+    ]);
+    // Шаг 2: перекодировать WAV в MP3
+    await runFfmpeg([
+      '-y', '-i', rawPath,
+      '-c:a', 'libmp3lame',
+      '-q:a', '2',
+      cleanPath
+    ]);
+    await fs.remove(rawPath).catch(() => {});
+    await fs.move(cleanPath, filePath, { overwrite: true });
+    console.log(`[prepareAudio] Strategy 3 OK (via WAV): ${path.basename(filePath)}`);
+    return;
+  } catch (e3) {
+    await fs.remove(cleanPath).catch(() => {});
+    await fs.remove(rawPath).catch(() => {});
+    console.warn(`[prepareAudio] Strategy 3 failed: ${e3.message}`);
+  }
+
+  // Все стратегии провалились — выбросить ошибку (не оставлять проблемный файл)
+  console.error(`[prepareAudio] ALL strategies failed for ${path.basename(filePath)}`);
+  throw new Error(`Cannot prepare audio file: ${path.basename(filePath)} — file may be corrupt or unsupported format`);
 }
 
 async function _processJobInner(jobId) {
@@ -1467,6 +1521,36 @@ async function _processJobInner(jobId) {
       throw new Error('Invalid voice duration');
     }
 
+    // Зацикливаем музыку до длительности голоса (заменяет -stream_loop в финальном FFmpeg)
+    if (musicUrl && musicPath) {
+      const loopedMusicPath = musicPath + '.looped.mp3';
+      try {
+        const musicDuration = await getMediaDuration(musicPath);
+        if (musicDuration > 0 && musicDuration < voiceDuration + 5) {
+          // Музыка короче видео — нужно зациклить
+          const loopCount = Math.ceil((voiceDuration + 5) / musicDuration);
+          // Создаём concat-файл для зацикливания
+          const concatListPath = musicPath + '.concat.txt';
+          const concatLines = Array(loopCount).fill(`file '${musicPath}'`).join('\n');
+          await fs.writeFile(concatListPath, concatLines);
+          await runFfmpeg([
+            '-y', '-f', 'concat', '-safe', '0',
+            '-i', concatListPath,
+            '-t', String(Math.ceil(voiceDuration + 5)),
+            '-c:a', 'libmp3lame', '-q:a', '2',
+            loopedMusicPath
+          ]);
+          await fs.move(loopedMusicPath, musicPath, { overwrite: true });
+          await fs.remove(concatListPath).catch(() => {});
+          console.log(`[music] Looped ${loopCount}x to cover ${voiceDuration.toFixed(1)}s`);
+        }
+        // Если музыка длиннее видео — используем как есть, ffmpeg обрежет по -shortest
+      } catch (loopErr) {
+        await fs.remove(loopedMusicPath).catch(() => {});
+        console.warn(`[music] Loop failed: ${loopErr.message} — using original music file`);
+      }
+    }
+
     let transitionDuration = 0;
     if (preparedMedia.length > 1) {
       const safeTransition = Math.min(
@@ -1522,10 +1606,8 @@ async function _processJobInner(jobId) {
     let logoInputIndex = null;
 
     if (musicUrl && musicPath) {
-      ffmpegArgs.push(
-        '-stream_loop', '-1',
-        '-i', musicPath
-      );
+      // Музыка уже зациклена prepareAudioFile + concat — подаём как обычный вход
+      ffmpegArgs.push('-i', musicPath);
       musicInputIndex = scenePlan.length + 1;
     }
 
