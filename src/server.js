@@ -1366,19 +1366,25 @@ ${events.map((e) => `Dialogue: 0,${formatAssTime(e.start)},${formatAssTime(e.end
 }
 
 /**
- * Удаляет встроенные видеопотоки (cover art) из MP3/аудио-файла.
- * Без этого FFmpeg 5.1 путается при -stream_loop и падает с "Option loop not found".
- * Делает: ffmpeg -i input -vn -acodec copy output → перемещает output на место input.
+ * Удаляет встроенные видеопотоки (cover art) из аудиофайла.
+ * MP3 от ElevenLabs и других TTS часто содержат обложку в ID3-тегах.
+ * FFmpeg 5.1 видит её как видеопоток и путается с -stream_loop.
+ *
+ * Решение: перезаписать файл, явно выбрав ТОЛЬКО аудиопоток:
+ *   ffmpeg -i input -map 0:a:0 -c copy output
+ * -map 0:a:0 = из входа #0 взять только первый аудиопоток, проигнорировать всё остальное.
  */
 async function stripCoverArt(filePath) {
-  const tmpPath = filePath + '.clean.mp3';
+  const ext = path.extname(filePath) || '.mp3';
+  const tmpPath = filePath + '.clean' + ext;
   try {
-    await runFfmpeg(['-y', '-i', filePath, '-vn', '-acodec', 'copy', tmpPath]);
+    // -map_metadata -1 также убирает проблемные метаданные которые могут содержать cover art ссылки
+    await runFfmpeg(['-y', '-i', filePath, '-map', '0:a:0', '-c', 'copy', '-map_metadata', '-1', tmpPath]);
     await fs.move(tmpPath, filePath, { overwrite: true });
+    console.log(`[stripCoverArt] Cleaned: ${path.basename(filePath)}`);
   } catch (e) {
-    // Если не удалось — не критично, файл остаётся как есть
     await fs.remove(tmpPath).catch(() => {});
-    console.warn(`stripCoverArt: ${e.message} — using original file`);
+    console.warn(`[stripCoverArt] ${e.message} — using original file`);
   }
 }
 
