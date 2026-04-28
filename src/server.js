@@ -1365,6 +1365,23 @@ ${events.map((e) => `Dialogue: 0,${formatAssTime(e.start)},${formatAssTime(e.end
 `;
 }
 
+/**
+ * Удаляет встроенные видеопотоки (cover art) из MP3/аудио-файла.
+ * Без этого FFmpeg 5.1 путается при -stream_loop и падает с "Option loop not found".
+ * Делает: ffmpeg -i input -vn -acodec copy output → перемещает output на место input.
+ */
+async function stripCoverArt(filePath) {
+  const tmpPath = filePath + '.clean.mp3';
+  try {
+    await runFfmpeg(['-y', '-i', filePath, '-vn', '-acodec', 'copy', tmpPath]);
+    await fs.move(tmpPath, filePath, { overwrite: true });
+  } catch (e) {
+    // Если не удалось — не критично, файл остаётся как есть
+    await fs.remove(tmpPath).catch(() => {});
+    console.warn(`stripCoverArt: ${e.message} — using original file`);
+  }
+}
+
 async function _processJobInner(jobId) {
   const job = jobs.get(jobId);
   if (!job) return;
@@ -1426,9 +1443,11 @@ async function _processJobInner(jobId) {
     }
 
     await downloadToFile(voiceUrl, voicePath);
+    await stripCoverArt(voicePath);
 
     if (musicUrl && musicPath) {
       await downloadToFile(musicUrl, musicPath);
+      await stripCoverArt(musicPath);
     }
 
     const voiceDuration = await getMediaDuration(voicePath);
@@ -1484,9 +1503,8 @@ async function _processJobInner(jobId) {
       }
     }
 
-    // -vn игнорирует cover art (картинку в ID3-тегах MP3) — без него FFmpeg падает с "Option loop not found"
-    // когда голосовой MP3 содержит обложку альбома
-    ffmpegArgs.push('-vn', '-i', voicePath);
+    // Cover art уже удалён stripCoverArt() — безопасно подавать как обычный аудио-вход
+    ffmpegArgs.push('-i', voicePath);
 
     const voiceInputIndex = scenePlan.length;
     let musicInputIndex = null;
@@ -1495,7 +1513,7 @@ async function _processJobInner(jobId) {
     if (musicUrl && musicPath) {
       ffmpegArgs.push(
         '-stream_loop', '-1',
-        '-vn', '-i', musicPath
+        '-i', musicPath
       );
       musicInputIndex = scenePlan.length + 1;
     }
