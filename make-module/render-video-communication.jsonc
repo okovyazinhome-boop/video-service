@@ -4,11 +4,11 @@
     "method": "POST",
     "body": {
       "images": "{{parameters.images}}",
-      "voiceMp3": "{{parameters.voiceMp3}}",
-      "musicMp3": "{{if(parameters.musicMp3, parameters.musicMp3, omit)}}",
-      "musicVolume": "{{if(parameters.musicVolume, parameters.musicVolume, 0.15)}}",
-      "subtitlesText": "{{if(parameters.subtitlesText, parameters.subtitlesText, omit)}}",
-      "wordTimings": "{{if(parameters.wordTimings, parameters.wordTimings, omit)}}",
+      "voiceMp3": "{{get(parameters.audioSettings, 'voiceMp3')}}",
+      "musicMp3": "{{if(get(parameters.audioSettings, 'musicMp3'), get(parameters.audioSettings, 'musicMp3'), omit)}}",
+      "musicVolume": "{{if(get(parameters.audioSettings, 'musicVolume'), get(parameters.audioSettings, 'musicVolume'), 0.15)}}",
+      "subtitlesText": "{{if(get(parameters.subtitleSettings, 'subtitlesText'), get(parameters.subtitleSettings, 'subtitlesText'), omit)}}",
+      "wordTimings": "{{if(get(parameters.subtitleSettings, 'wordTimings'), get(parameters.subtitleSettings, 'wordTimings'), omit)}}",
       "videoPreset": "{{if(get(parameters.videoSettings, 'videoPreset'), get(parameters.videoSettings, 'videoPreset'), 'reels_1080_30')}}",
       "orientation": "{{if(get(parameters.videoSettings, 'orientation'), get(parameters.videoSettings, 'orientation'), '9:16')}}",
       "quality": "{{if(get(parameters.videoSettings, 'quality'), get(parameters.videoSettings, 'quality'), 'full-hd')}}",
@@ -28,10 +28,10 @@
         "fontSize": "{{if(get(parameters.subtitleSettings, 'fontSize'), get(parameters.subtitleSettings, 'fontSize'), omit)}}",
         "primaryColor": "{{ifempty(get(parameters.subtitleSettings, 'primaryColor'), '#FFFFFF')}}",
         "outlineColor": "{{ifempty(get(parameters.subtitleSettings, 'outlineColor'), '#000000')}}",
-        "activeWordTextColor": "{{if(get(parameters.subtitleSettings, 'activeWordTextColor'), get(parameters.subtitleSettings, 'activeWordTextColor'), omit)}}",
-        "activeWordBackColor": "{{if(get(parameters.subtitleSettings, 'activeWordBackColor'), get(parameters.subtitleSettings, 'activeWordBackColor'), omit)}}",
-        "keywordColor": "{{ifempty(get(parameters.subtitleSettings, 'keywordColor'), '#FFD700')}}",
-        "bold": "{{if(get(parameters.subtitleSettings, 'bold') !== undefined, get(parameters.subtitleSettings, 'bold'), true)}}"
+        "outline": "{{if(get(parameters.subtitleSettings, 'outline') !== undefined, get(parameters.subtitleSettings, 'outline'), 2)}}",
+        "activeWordTextColor": "{{if(get(get(parameters.subtitleSettings, 'advanced'), 'activeWordTextColor'), get(get(parameters.subtitleSettings, 'advanced'), 'activeWordTextColor'), omit)}}",
+        "activeWordBackColor": "{{if(get(get(parameters.subtitleSettings, 'advanced'), 'activeWordBackColor'), get(get(parameters.subtitleSettings, 'advanced'), 'activeWordBackColor'), omit)}}",
+        "keywordColor": "{{ifempty(get(get(parameters.subtitleSettings, 'advanced'), 'keywordColor'), '#FFD700')}}"
       }
     },
     "response": {

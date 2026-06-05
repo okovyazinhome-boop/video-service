@@ -18,24 +18,23 @@
         {
           "name": "durationSeconds",
           "type": "number",
-          "label": "Длительность кадра",
+          "label": "Длительность кадра, сек",
           "required": false,
-          "validate": { "min": 0.1, "max": 3600 },
-          "help": "Сколько секунд показывать этот кадр. Оставьте пустым — сервис распределит время автоматически по озвучке. Если сумма длительностей больше озвучки, видео станет длиннее голоса."
+          "help": "Сколько секунд показывать этот кадр. Оставьте пустым — сервис распределит время автоматически."
         },
         {
-          "name": "overlayText",
-          "type": "text",
+          "name": "overlayCaption",
+          "type": "collection",
           "label": "Надпись на кадре",
           "required": false,
-          "help": "Текст, который появится поверх этого конкретного кадра. Можно оставить пустым."
-        },
-        {
-          "name": "overlaySettings",
-          "type": "collection",
-          "label": "Настройки надписи на кадре",
-          "required": false,
           "spec": [
+            {
+              "name": "text",
+              "type": "text",
+              "label": "Текст",
+              "required": false,
+              "help": "Текст, который появится поверх этого конкретного кадра. Можно оставить пустым."
+            },
             {
               "name": "fontName",
               "type": "select",
@@ -52,15 +51,14 @@
                 { "label": "Bebas Neue", "value": "BebasNeue" },
                 { "label": "Ubuntu", "value": "Ubuntu" }
               ],
-              "help": "Шрифт надписи на этом кадре. Все варианты встроены в сервер."
+              "help": "Шрифт надписи на этом кадре."
             },
             {
               "name": "fontSize",
               "type": "number",
               "label": "Размер",
               "required": false,
-              "validate": { "min": 12, "max": 300 },
-              "help": "Оставьте пустым для авторазмера. Укажите число, если нужен точный размер."
+              "help": "Размер шрифта. Оставьте пустым для авторазмера."
             },
             {
               "name": "fontColor",
@@ -89,7 +87,7 @@
               "label": "Цвет подложки",
               "required": false,
               "default": "#000000",
-              "help": "Цвет фона под надписью. Прозрачность задаётся отдельно."
+              "help": "Цвет фона под надписью."
             },
             {
               "name": "bgOpacity",
@@ -97,16 +95,14 @@
               "label": "Прозрачность подложки",
               "required": false,
               "default": 0,
-              "validate": { "min": 0, "max": 1 },
-              "help": "0 — без подложки, 1 — непрозрачная. Например 0.6 — полупрозрачная."
+              "help": "0 — без подложки, 1 — непрозрачная."
             },
             {
               "name": "bgPadding",
               "type": "number",
-              "label": "Отступ подложки",
+              "label": "Отступ подложки, px",
               "required": false,
               "default": 8,
-              "validate": { "min": 0, "max": 80 },
               "help": "Отступ между текстом и краями подложки в пикселях."
             },
             {
@@ -115,8 +111,7 @@
               "label": "Толщина обводки",
               "required": false,
               "default": 2,
-              "validate": { "min": 0, "max": 20 },
-              "help": "Обводка помогает читать текст на светлом или пёстром фоне. 0 — без обводки."
+              "help": "Обводка помогает читать текст. 0 — без обводки."
             },
             {
               "name": "bold",
@@ -127,7 +122,7 @@
               "help": "Жирное начертание надписи на этом кадре."
             }
           ],
-          "help": "Внешний вид надписи на этом кадре: шрифт, размер, цвет, позиция, подложка и обводка."
+          "help": "Текст и внешний вид надписи на этом кадре."
         },
         {
           "name": "motionSettings",
@@ -148,24 +143,22 @@
                 { "label": "Плавный отъезд", "value": "smooth-out" },
                 { "label": "Резкий зум", "value": "sharp" }
               ],
-              "help": "Плавный — постепенный наезд. Резкий — мгновенный скачок масштаба для динамичного акцента."
+              "help": "Плавный — постепенный наезд. Резкий — мгновенный скачок масштаба."
             },
             {
               "name": "zoomPercent",
               "type": "number",
-              "label": "Сила зума",
+              "label": "Сила зума, %",
               "required": false,
               "default": 20,
-              "validate": { "min": 0, "max": 300 },
-              "help": "На сколько увеличить кадр. 20 — лёгкий наезд, 50 — заметный акцент, 100+ — сильное приближение."
+              "help": "Процент приближения. 20% — лёгкий наезд, 50% — заметный акцент, 100%+ — сильное приближение."
             },
             {
               "name": "zoomAt",
               "type": "number",
-              "label": "Момент зума",
+              "label": "Момент зума, сек",
               "required": false,
-              "validate": { "min": 0 },
-              "help": "Для резкого зума: на какой секунде кадра сделать скачок масштаба. Пусто — примерно в середине кадра."
+              "help": "Для резкого зума: через сколько секунд после начала кадра сделать скачок. Пусто — середина кадра."
             },
             {
               "name": "direction",
@@ -185,78 +178,72 @@
               "help": "Куда смещается камера при зуме."
             }
           ],
-          "help": "Движение внутри кадра: тип зума, сила, момент резкого зума и направление."
-        },
-        {
-          "name": "videoBehavior",
-          "type": "select",
-          "label": "Поведение видео",
-          "required": false,
-          "default": "clip",
-          "options": [
-            { "label": "Обрезать по клипу", "value": "clip" },
-            { "label": "Зациклить до длительности кадра", "value": "loop" },
-            { "label": "Заморозить последний кадр", "value": "freeze" }
-          ],
-          "help": "Для видео-кадров. Обрезать по клипу — переход начнётся, когда b-roll закончится."
+          "help": "Зум и движение внутри кадра."
         }
       ]
     },
-    "validate": { "minItems": 1, "maxItems": 30 },
     "help": "Кадры ролика: изображения или короткие видео. Порядок кадров = порядок в ролике."
   },
   {
-    "name": "voiceMp3",
-    "type": "url",
-    "label": "Озвучка (MP3)",
+    "name": "audioSettings",
+    "type": "collection",
+    "label": "Озвучка",
     "required": true,
-    "help": "MP3 с голосом. Длина озвучки определяет базовую длину ролика."
-  },
-  {
-    "name": "musicMp3",
-    "type": "url",
-    "label": "Фоновая музыка (MP3)",
-    "required": false,
-    "help": "MP3 с музыкой. Если музыка короче ролика, сервис зациклит её."
-  },
-  {
-    "name": "musicVolume",
-    "type": "number",
-    "label": "Громкость музыки",
-    "required": false,
-    "default": 0.15,
-    "validate": { "min": 0, "max": 1 },
-    "help": "0 — без музыки, 0.1–0.2 — тихий фон, 1 — полная громкость."
-  },
-  {
-    "name": "subtitlesText",
-    "type": "text",
-    "label": "Текст субтитров",
-    "required": false,
-    "help": "Полный текст субтитров. Слова в *звёздочках* можно выделить цветом."
-  },
-  {
-    "name": "wordTimings",
-    "type": "array",
-    "label": "Таймкоды слов",
-    "required": false,
-    "spec": {
-      "type": "collection",
-      "label": "Слово",
-      "spec": [
-        { "name": "text", "type": "text", "label": "Слово", "required": true },
-        { "name": "start", "type": "number", "label": "Начало (сек)", "required": true },
-        { "name": "end", "type": "number", "label": "Конец (сек)", "required": true }
-      ]
-    },
-    "help": "Массив слов с временем начала и конца. Используется для точной подсветки слов."
+    "spec": [
+      {
+        "name": "voiceMp3",
+        "type": "url",
+        "label": "Озвучка (MP3)",
+        "required": true,
+        "help": "MP3 с голосом. Длина озвучки определяет базовую длину ролика."
+      },
+      {
+        "name": "musicMp3",
+        "type": "url",
+        "label": "Фоновая музыка (MP3)",
+        "required": false,
+        "help": "MP3 с музыкой. Если музыка короче ролика, сервис зациклит её."
+      },
+      {
+        "name": "musicVolume",
+        "type": "number",
+        "label": "Громкость музыки",
+        "required": false,
+        "default": 0.15,
+        "help": "0 — без музыки, 0.1–0.2 — тихий фон, 1 — полная громкость."
+      }
+    ],
+    "help": "Голос, фоновая музыка и громкость музыки."
   },
   {
     "name": "subtitleSettings",
     "type": "collection",
-    "label": "Настройки субтитров",
+    "label": "Субтитры",
     "required": false,
     "spec": [
+      {
+        "name": "subtitlesText",
+        "type": "text",
+        "label": "Текст субтитров",
+        "required": false,
+        "help": "Полный текст субтитров. Слова в *звёздочках* можно выделить цветом."
+      },
+      {
+        "name": "wordTimings",
+        "type": "array",
+        "label": "Таймкоды слов",
+        "required": false,
+        "spec": {
+          "type": "collection",
+          "label": "Слово",
+          "spec": [
+            { "name": "text", "type": "text", "label": "Слово", "required": true },
+            { "name": "start", "type": "number", "label": "Начало, сек", "required": true },
+            { "name": "end", "type": "number", "label": "Конец, сек", "required": true }
+          ]
+        },
+        "help": "Массив слов с временем начала и конца. Используется для точной подсветки слов."
+      },
       {
         "name": "mode",
         "type": "select",
@@ -268,20 +255,7 @@
           { "label": "Одно крупное слово", "value": "single-word" },
           { "label": "Фразы", "value": "phrase" }
         ],
-        "help": "Выбери стиль: подсветка слов, одно крупное слово или фразы."
-      },
-      {
-        "name": "position",
-        "type": "select",
-        "label": "Позиция",
-        "required": false,
-        "default": "bottom",
-        "options": [
-          { "label": "Снизу", "value": "bottom" },
-          { "label": "По центру", "value": "center" },
-          { "label": "Сверху", "value": "top" }
-        ],
-        "help": "Где показывать субтитры. Для Reels/Shorts лучше не ставить слишком низко."
+        "help": "Выбери стиль отображения субтитров."
       },
       {
         "name": "animation",
@@ -299,6 +273,19 @@
         "help": "Как появляется новый текст."
       },
       {
+        "name": "position",
+        "type": "select",
+        "label": "Позиция",
+        "required": false,
+        "default": "bottom",
+        "options": [
+          { "label": "Снизу", "value": "bottom" },
+          { "label": "По центру", "value": "center" },
+          { "label": "Сверху", "value": "top" }
+        ],
+        "help": "Где показывать субтитры. Для Reels/Shorts лучше не ставить слишком низко."
+      },
+      {
         "name": "fontName",
         "type": "select",
         "label": "Шрифт",
@@ -306,31 +293,31 @@
         "default": "Inter",
         "options": [
           { "label": "Inter", "value": "Inter" },
+          { "label": "Inter Bold", "value": "Inter:bold" },
           { "label": "Roboto", "value": "Roboto" },
+          { "label": "Roboto Bold", "value": "Roboto:bold" },
           { "label": "Montserrat", "value": "Montserrat" },
+          { "label": "Montserrat Bold", "value": "Montserrat:bold" },
           { "label": "Oswald", "value": "Oswald" },
+          { "label": "Oswald Bold", "value": "Oswald:bold" },
           { "label": "Raleway", "value": "Raleway" },
+          { "label": "Raleway Bold", "value": "Raleway:bold" },
           { "label": "Nunito", "value": "Nunito" },
+          { "label": "Nunito Bold", "value": "Nunito:bold" },
           { "label": "Bebas Neue", "value": "BebasNeue" },
-          { "label": "Ubuntu", "value": "Ubuntu" }
+          { "label": "Bebas Neue Bold", "value": "BebasNeue:bold" },
+          { "label": "Ubuntu", "value": "Ubuntu" },
+          { "label": "Ubuntu Bold", "value": "Ubuntu:bold" }
         ],
-        "help": "Шрифт субтитров. Все варианты встроены в сервер."
+        "help": "Шрифт субтитров. Bold-варианты используют жирное начертание."
       },
       {
         "name": "fontSize",
         "type": "number",
         "label": "Размер",
         "required": false,
-        "validate": { "min": 12, "max": 200 },
-        "help": "Оставьте пустым для авторазмера. Укажите число, если нужен точный размер."
-      },
-      {
-        "name": "bold",
-        "type": "boolean",
-        "label": "Жирный",
-        "required": false,
-        "default": true,
-        "help": "Жирное начертание субтитров."
+        "default": 76,
+        "help": "Размер шрифта. По умолчанию подобран для вертикального видео."
       },
       {
         "name": "primaryColor",
@@ -349,31 +336,48 @@
         "help": "Обводка помогает читать текст на светлом или пёстром фоне."
       },
       {
-        "name": "activeWordTextColor",
-        "type": "color",
-        "label": "Активное слово — текст",
+        "name": "outline",
+        "type": "number",
+        "label": "Толщина обводки",
         "required": false,
-        "default": "#FFFFFF",
-        "help": "Цвет текста слова, которое произносится сейчас."
+        "default": 2,
+        "help": "Толщина обводки вокруг букв. 0 — без обводки."
       },
       {
-        "name": "activeWordBackColor",
-        "type": "color",
-        "label": "Активное слово — фон",
+        "name": "advanced",
+        "type": "collection",
+        "label": "Дополнительно",
         "required": false,
-        "default": "#8B5CF6",
-        "help": "Цвет блока под активным словом."
-      },
-      {
-        "name": "keywordColor",
-        "type": "color",
-        "label": "Цвет ключевых слов",
-        "required": false,
-        "default": "#FFD700",
-        "help": "Цвет слов, обёрнутых в *звёздочки*."
+        "spec": [
+          {
+            "name": "activeWordTextColor",
+            "type": "color",
+            "label": "Активное слово — текст",
+            "required": false,
+            "default": "#FFFFFF",
+            "help": "Цвет текста слова, которое произносится сейчас."
+          },
+          {
+            "name": "activeWordBackColor",
+            "type": "color",
+            "label": "Активное слово — фон",
+            "required": false,
+            "default": "#8B5CF6",
+            "help": "Цвет блока под активным словом."
+          },
+          {
+            "name": "keywordColor",
+            "type": "color",
+            "label": "Цвет ключевых слов",
+            "required": false,
+            "default": "#FFD700",
+            "help": "Цвет слов, обёрнутых в *звёздочки*."
+          }
+        ],
+        "help": "Тонкие настройки подсветки слов."
       }
     ],
-    "help": "Внешний вид субтитров: режим, позиция, шрифт, размер, цвета и анимация."
+    "help": "Текст и внешний вид субтитров."
   },
   {
     "name": "videoSettings",
@@ -444,43 +448,34 @@
         "required": false,
         "default": "fade",
         "options": [
-          { "label": "Случайный", "value": "random" },
-          { "label": "Fade", "value": "fade" },
-          { "label": "Fade to Black", "value": "fadeblack" },
-          { "label": "Fade to White", "value": "fadewhite" },
-          { "label": "Dissolve", "value": "dissolve" },
-          { "label": "Smooth Left", "value": "smoothleft" },
-          { "label": "Smooth Right", "value": "smoothright" },
-          { "label": "Slide Left", "value": "slideleft" },
-          { "label": "Slide Right", "value": "slideright" },
-          { "label": "Zoom In", "value": "zoomin" },
-          { "label": "Pixelize", "value": "pixelize" },
-          { "label": "Circle Open", "value": "circleopen" },
-          { "label": "Circle Close", "value": "circleclose" },
-          { "label": "Radial", "value": "radial" },
-          { "label": "Wipe Left", "value": "wipeleft" },
-          { "label": "Wipe Right", "value": "wiperight" },
-          { "label": "Wipe Up", "value": "wipeup" },
-          { "label": "Wipe Down", "value": "wipedown" }
+          { "label": "Fade — плавное затухание", "value": "fade" },
+          { "label": "Smooth Left — плавно влево", "value": "smoothleft" },
+          { "label": "Smooth Right — плавно вправо", "value": "smoothright" },
+          { "label": "Slide Left — сдвиг влево", "value": "slideleft" },
+          { "label": "Slide Right — сдвиг вправо", "value": "slideright" },
+          { "label": "Zoom In — приближение", "value": "zoomin" },
+          { "label": "Dissolve — растворение", "value": "dissolve" },
+          { "label": "Pixelize — пикселизация", "value": "pixelize" },
+          { "label": "Random — случайный", "value": "random" }
         ],
-        "help": "Тип перехода между кадрами."
+        "help": "Динамичный переход между кадрами. Эти варианты поддерживаются FFmpeg 5.x."
       },
       {
         "name": "bitratePreset",
         "type": "select",
-        "label": "Качество экспорта",
+        "label": "Битрейт",
         "required": false,
         "default": "standard",
         "options": [
-          { "label": "Быстро", "value": "fast" },
+          { "label": "Быстрый", "value": "fast" },
           { "label": "Стандарт", "value": "standard" },
-          { "label": "Высокое", "value": "high" },
-          { "label": "Максимальное", "value": "ultra" }
+          { "label": "Высокий", "value": "high" },
+          { "label": "Максимальный", "value": "ultra" }
         ],
-        "help": "Выше качество — больше файл и дольше рендер."
+        "help": "Чем выше битрейт, тем лучше качество и больше файл. Для Shorts обычно достаточно «Стандарт»."
       }
     ],
-    "help": "Формат итогового ролика: пресет, ориентация, качество, FPS и переходы."
+    "help": "Формат итогового ролика."
   },
   {
     "name": "brandSettings",
@@ -533,16 +528,16 @@
         "label": "Очистить метаданные",
         "required": false,
         "default": true,
-        "help": "Удаляет служебные метаданные входных файлов и часть encoder-информации. Включено по умолчанию."
+        "help": "Удаляет служебные метаданные входных файлов и часть encoder-информации."
       },
       {
         "name": "resolution",
         "type": "text",
         "label": "Resolution fallback",
         "required": false,
-        "help": "Техническое поле для старых сценариев: например 1080x1920. Используется только если не выбраны новые настройки видео."
+        "help": "Техническое поле для старых сценариев: например 1080x1920."
       }
     ],
-    "help": "Webhook и технические параметры для нестандартных сценариев."
+    "help": "Webhook и технические параметры."
   }
 ]

@@ -316,7 +316,8 @@ function normalizeMotionSettings(item = {}) {
 }
 
 function normalizeOverlayStyle(item = {}) {
-  return item.overlayStyle || item.captionStyle || item.overlaySettings || {};
+  const caption = item.overlayCaption || item.caption || {};
+  return caption.style || caption || item.overlayStyle || item.captionStyle || item.overlaySettings || {};
 }
 
 function normalizeVideoBehavior(item = {}) {
@@ -354,11 +355,11 @@ function normalizeMediaItems(payload = {}) {
         }
         const url = item.url || item.fileUrl || item;
         return {
-          type: item.type || guessMediaTypeFromUrl(url || ''),
-          url,
-          narrationText: String(item.narrationText || '').trim(),
-          sceneRole: String(item.sceneRole || '').trim(),
-          overlayText: String(item.overlayText || item.captionText || '').trim(),
+        type: item.type || guessMediaTypeFromUrl(url || ''),
+        url,
+        narrationText: String(item.narrationText || '').trim(),
+        sceneRole: String(item.sceneRole || '').trim(),
+        overlayText: String(item.overlayText || item.captionText || item.overlayCaption?.text || item.caption?.text || '').trim(),
           durationSeconds: parseOptionalPositiveNumber(item.durationSeconds ?? item.duration ?? item.sceneDuration),
           overlayStyle: normalizeOverlayStyle(item),
           motionSettings: normalizeMotionSettings(item),
@@ -1531,7 +1532,9 @@ function buildAssContent({
   wordTimings = [],
   highlightKeywords = new Set()
 }) {
-  const fontName = subtitleStyle.fontName || 'Inter';
+  const hasExplicitFontName = subtitleStyle.fontName !== undefined && subtitleStyle.fontName !== null && subtitleStyle.fontName !== '';
+  const [rawFontName, rawFontWeight] = String(subtitleStyle.fontName || 'Inter').split(':');
+  const fontName = rawFontName || 'Inter';
   const subtitleMode = String(subtitleStyle.mode || 'phrase').trim().toLowerCase();
   const isSingleWord = subtitleMode === 'single-word';
   const fontSize = Number(subtitleStyle.fontSize || Math.max(24, Math.round(height * (isSingleWord ? 0.07 : 0.026))));
@@ -1546,7 +1549,9 @@ function buildAssContent({
 
   const outline = Number(subtitleStyle.outline || 2);
   const shadow = Number(subtitleStyle.shadow || 0);
-  const bold = subtitleStyle.bold === false ? 0 : 1;
+  const bold = rawFontWeight
+    ? (rawFontWeight === 'bold' ? 1 : 0)
+    : (subtitleStyle.bold !== undefined ? (subtitleStyle.bold === false ? 0 : 1) : (hasExplicitFontName ? 0 : 1));
   const alignment = Number(subtitleStyle.alignment || 2);
 
   // Отступы слева/справа — минимум 5% ширины видео, чтобы текст не вылезал за края
