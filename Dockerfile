@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     fonts-dejavu-core \
     fonts-dejavu-extra \
+    fonts-noto-color-emoji \
     curl \
     unzip \
     && rm -rf /var/lib/apt/lists/*

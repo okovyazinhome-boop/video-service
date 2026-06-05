@@ -21,6 +21,7 @@
       "webhookUrl": "{{if(get(parameters.advancedMode, 'webhookUrl'), get(parameters.advancedMode, 'webhookUrl'), omit)}}",
       "cleanMetadata": "{{if(get(parameters.advancedMode, 'cleanMetadata') !== undefined, get(parameters.advancedMode, 'cleanMetadata'), true)}}",
       "subtitleStyle": {
+        "preset": "{{if(get(parameters.subtitleSettings, 'preset'), get(parameters.subtitleSettings, 'preset'), 'custom')}}",
         "mode": "{{if(get(parameters.subtitleSettings, 'mode'), get(parameters.subtitleSettings, 'mode'), 'word-highlight')}}",
         "position": "{{if(get(parameters.subtitleSettings, 'position'), get(parameters.subtitleSettings, 'position'), 'bottom')}}",
         "animation": "{{if(get(parameters.subtitleSettings, 'animation'), get(parameters.subtitleSettings, 'animation'), 'fade')}}",

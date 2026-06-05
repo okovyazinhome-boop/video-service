@@ -264,10 +264,17 @@ async function getMediaDuration(filePath) {
 // Только переходы, поддерживаемые FFmpeg 5.x (Debian 12)
 // coverleft/coverright/coverup/coverdown/revealleft/revealright/squeezeh/squeezev — только FFmpeg 6+
 const ALLOWED_TRANSITIONS = [
-  'fade', 'smoothleft', 'smoothright', 'slideleft', 'slideright',
+  'fade', 'smoothleft', 'smoothright', 'smoothup', 'smoothdown',
+  'slideleft', 'slideright', 'slideup', 'slidedown',
   'zoomin', 'fadeblack', 'fadewhite', 'dissolve', 'pixelize',
   'circleopen', 'circleclose', 'radial',
-  'wipeleft', 'wiperight', 'wipeup', 'wipedown'
+  'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+  'wipetl', 'wipetr', 'wipebl', 'wipebr',
+  'diagtl', 'diagtr', 'diagbl', 'diagbr',
+  'hblur', 'fadegrays', 'fadefast', 'fadeslow',
+  'hlslice', 'hrslice', 'vuslice', 'vdslice',
+  'vertopen', 'vertclose', 'horzopen', 'horzclose',
+  'circlecrop', 'rectcrop', 'distance', 'squeezeh', 'squeezev'
 ];
 
 function getAllowedTransition(transitionType) {
@@ -417,7 +424,7 @@ function assColorFromHex(hex, fallback = '&H00FFFFFF') {
 
 function parseKeywordsFromText(text) {
   const keywords = new Set();
-  const cleanText = String(text || '').replace(/\*([^*]+)\*/g, (_, word) => {
+  const cleanText = stripSubtitleMarkup(String(text || '')).replace(/\*([^*]+)\*/g, (_, word) => {
     // Очищаем от пунктуации для корректного сравнения с токенами
     const cleaned = word.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '').trim();
     if (cleaned) keywords.add(cleaned);
@@ -426,8 +433,18 @@ function parseKeywordsFromText(text) {
   return { cleanText, keywords };
 }
 
-function sanitizeAssText(text) {
+function stripSubtitleMarkup(text) {
   return String(text || '')
+    .replace(/\[\/?emphasized\]/gi, '')
+    .replace(/\[\/?emphasis\]/gi, '')
+    .replace(/<\/?emphasis[^>]*>/gi, '')
+    .replace(/<\/?prosody[^>]*>/gi, '')
+    .replace(/<break[^>]*\/?>/gi, ' ')
+    .replace(/<\/?speak[^>]*>/gi, '');
+}
+
+function sanitizeAssText(text) {
+  return stripSubtitleMarkup(text)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .replace(/[{}]/g, '')
@@ -1134,7 +1151,7 @@ function normalizeWordTimings(wordTimings = []) {
 
   return wordTimings
     .map((item) => ({
-      text: sanitizeAssText(item.text || '').replace(/\n+/g, ' ').trim(),
+      text: sanitizeAssText(item.text || item.word || '').replace(/\n+/g, ' ').trim(),
       start: Number(item.start),
       end: Number(item.end)
     }))
@@ -1285,12 +1302,12 @@ const MOTION_PRESETS = [
 
 const MOTION_DIRECTIONS = {
   center: { xFactor: 0.50, yFactor: 0.50 },
-  'top-left': { xFactor: 0.20, yFactor: 0.20 },
-  'top-right': { xFactor: 0.80, yFactor: 0.20 },
-  'bottom-left': { xFactor: 0.20, yFactor: 0.80 },
-  'bottom-right': { xFactor: 0.80, yFactor: 0.80 },
-  left: { xFactor: 0.25, yFactor: 0.50 },
-  right: { xFactor: 0.75, yFactor: 0.50 }
+  'top-left': { xFactor: 0.00, yFactor: 0.00 },
+  'top-right': { xFactor: 1.00, yFactor: 0.00 },
+  'bottom-left': { xFactor: 0.00, yFactor: 1.00 },
+  'bottom-right': { xFactor: 1.00, yFactor: 1.00 },
+  left: { xFactor: 0.00, yFactor: 0.50 },
+  right: { xFactor: 1.00, yFactor: 0.50 }
 };
 
 function getImageMotionPreset(sceneIndex, motionPresetName) {
@@ -1357,6 +1374,9 @@ function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetNa
   const duration = Number(scene.inputDuration.toFixed(3));
   const outputFps = parseFps(fps);
   const motion = normalizeImageMotion(scene, sceneIndex, motionPresetName);
+  const smoothScale = Math.min(3, Math.max(2, Number(scene.motionSettings?.smoothScale || 2)));
+  const zoomWidth = Math.round(width * smoothScale);
+  const zoomHeight = Math.round(height * smoothScale);
 
   // Если motion отключён — просто scale+crop без zoompan
   if (motion.type === 'none') {
@@ -1368,23 +1388,25 @@ function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetNa
   const frames = Math.max(1, Math.ceil(Number(scene.inputDuration || 0) * outputFps));
   const xExpr = `(iw-iw/zoom)*${motion.xFactor}`;
   const yExpr = `(ih-ih/zoom)*${motion.yFactor}`;
+  const progressExpr = `(on/${Math.max(1, frames - 1)})`;
+  const easedProgressExpr = `(${progressExpr}*${progressExpr}*(3-2*${progressExpr}))`;
 
   let zExpr;
   if (motion.type === 'sharp') {
     const triggerFrame = Math.max(1, Math.round(Number(motion.zoomAt || (duration / 2)) * outputFps));
     zExpr = `if(lt(on,${triggerFrame}),${motion.zoomStart},${motion.zoomEnd})`;
   } else {
-    const denominator = Math.max(1, frames - 1);
-    zExpr = `${motion.zoomStart}+(${motion.zoomEnd}-${motion.zoomStart})*on/${denominator}`;
+    zExpr = `${motion.zoomStart}+(${motion.zoomEnd}-${motion.zoomStart})*${easedProgressExpr}`;
   }
 
-  return `[${sceneIndex}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-    `crop=${width}:${height},` +
+  return `[${sceneIndex}:v]scale=${zoomWidth}:${zoomHeight}:force_original_aspect_ratio=increase,` +
+    `crop=${zoomWidth}:${zoomHeight},` +
     `zoompan=` +
     `z='${zExpr}':` +
     `x='${xExpr}':` +
     `y='${yExpr}':` +
-    `d=${frames}:s=${width}x${height}:fps=${outputFps},` +
+    `d=${frames}:s=${zoomWidth}x${zoomHeight}:fps=${outputFps},` +
+    `scale=${width}:${height}:flags=lanczos,` +
     `setsar=1,format=yuv420p,trim=duration=${duration},setpts=PTS-STARTPTS[v${sceneIndex}]`;
 }
 
@@ -1545,6 +1567,7 @@ function buildAssContent({
   wordTimings = [],
   highlightKeywords = new Set()
 }) {
+  subtitleStyle = applySubtitlePreset(subtitleStyle);
   const hasExplicitFontName = subtitleStyle.fontName !== undefined && subtitleStyle.fontName !== null && subtitleStyle.fontName !== '';
   const [rawFontName, rawFontWeight] = String(subtitleStyle.fontName || 'Inter').split(':');
   const fontName = rawFontName || 'Inter';
@@ -1660,6 +1683,89 @@ Style: KeyWord,${fontName},${fontSize},${keywordColour},${keywordColour},${outli
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 ${events.map((e) => `Dialogue: 0,${formatAssTime(e.start)},${formatAssTime(e.end)},Default,,0,0,0,,${animTag}${e.text}`).join('\n')}
 `;
+}
+
+function applySubtitlePreset(subtitleStyle = {}) {
+  const presetName = String(subtitleStyle.preset || 'custom').trim().toLowerCase();
+  const presets = {
+    'capcut-white': {
+      mode: 'word-highlight',
+      fontName: 'Inter:bold',
+      fontSize: 78,
+      primaryColor: '#FFFFFF',
+      outlineColor: '#000000',
+      outline: 4,
+      activeWordTextColor: '#FFFFFF',
+      activeWordBackColor: '#7C3AED',
+      animation: 'pop'
+    },
+    'yellow-pop': {
+      mode: 'single-word',
+      fontName: 'Montserrat:bold',
+      fontSize: 96,
+      primaryColor: '#FFE600',
+      outlineColor: '#000000',
+      outline: 5,
+      animation: 'bounce'
+    },
+    'minimal-clean': {
+      mode: 'phrase',
+      fontName: 'Inter',
+      fontSize: 64,
+      primaryColor: '#FFFFFF',
+      outlineColor: '#111111',
+      outline: 2,
+      animation: 'fade'
+    },
+    'black-box': {
+      mode: 'phrase',
+      fontName: 'Inter:bold',
+      fontSize: 68,
+      primaryColor: '#FFFFFF',
+      outlineColor: '#000000',
+      backColor: '#000000',
+      outline: 3,
+      animation: 'fade'
+    },
+    'neon-green': {
+      mode: 'word-highlight',
+      fontName: 'Montserrat:bold',
+      fontSize: 82,
+      primaryColor: '#FFFFFF',
+      outlineColor: '#00FF66',
+      outline: 4,
+      activeWordTextColor: '#000000',
+      activeWordBackColor: '#00FF66',
+      animation: 'pop'
+    },
+    'red-impact': {
+      mode: 'single-word',
+      fontName: 'BebasNeue:bold',
+      fontSize: 112,
+      primaryColor: '#FFFFFF',
+      outlineColor: '#FF1744',
+      outline: 5,
+      animation: 'pop'
+    },
+    'blue-karaoke': {
+      mode: 'word-highlight',
+      fontName: 'Roboto:bold',
+      fontSize: 76,
+      primaryColor: '#FFFFFF',
+      outlineColor: '#000000',
+      outline: 3,
+      activeWordTextColor: '#FFFFFF',
+      activeWordBackColor: '#2563EB',
+      animation: 'slide-up'
+    }
+  };
+
+  if (!presets[presetName]) return subtitleStyle;
+  return {
+    ...subtitleStyle,
+    ...presets[presetName],
+    preset: presetName
+  };
 }
 
 /**

@@ -347,6 +347,48 @@
         "help": "Массив слов с временем начала и конца. Используется для точной подсветки слов."
       },
       {
+        "name": "preset",
+        "type": "select",
+        "label": "Пресет субтитров",
+        "required": false,
+        "default": "custom",
+        "options": [
+          {
+            "label": "Свои настройки",
+            "value": "custom"
+          },
+          {
+            "label": "CapCut White",
+            "value": "capcut-white"
+          },
+          {
+            "label": "Yellow Pop",
+            "value": "yellow-pop"
+          },
+          {
+            "label": "Minimal Clean",
+            "value": "minimal-clean"
+          },
+          {
+            "label": "Black Box",
+            "value": "black-box"
+          },
+          {
+            "label": "Neon Green",
+            "value": "neon-green"
+          },
+          {
+            "label": "Red Impact",
+            "value": "red-impact"
+          },
+          {
+            "label": "Blue Karaoke",
+            "value": "blue-karaoke"
+          }
+        ],
+        "help": "Быстрый стиль субтитров. Если выбран пресет, он задаёт основные цвета, размер и анимацию."
+      },
+      {
         "name": "mode",
         "type": "select",
         "label": "Режим",
@@ -695,6 +737,26 @@
             "value": "fade"
           },
           {
+            "label": "Flash White — белая вспышка",
+            "value": "fadewhite"
+          },
+          {
+            "label": "Flash Black — через чёрный",
+            "value": "fadeblack"
+          },
+          {
+            "label": "Fast Fade — быстрый fade",
+            "value": "fadefast"
+          },
+          {
+            "label": "Slow Fade — мягкий fade",
+            "value": "fadeslow"
+          },
+          {
+            "label": "Blur — размытие",
+            "value": "hblur"
+          },
+          {
             "label": "Smooth Left — плавно влево",
             "value": "smoothleft"
           },
@@ -721,6 +783,18 @@
           {
             "label": "Pixelize — пикселизация",
             "value": "pixelize"
+          },
+          {
+            "label": "Diagonal — по диагонали",
+            "value": "diagtl"
+          },
+          {
+            "label": "Circle Open — круговое раскрытие",
+            "value": "circleopen"
+          },
+          {
+            "label": "Slice — полосы",
+            "value": "hlslice"
           },
           {
             "label": "Random — случайный",
