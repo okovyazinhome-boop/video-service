@@ -1,0 +1,27 @@
+[
+  {
+    "name": "jobId",
+    "type": "text",
+    "label": "Job ID"
+  },
+  {
+    "name": "status",
+    "type": "text",
+    "label": "Status"
+  },
+  {
+    "name": "videoUrl",
+    "type": "url",
+    "label": "Video URL"
+  },
+  {
+    "name": "thumbnailUrl",
+    "type": "url",
+    "label": "Thumbnail URL"
+  },
+  {
+    "name": "error",
+    "type": "text",
+    "label": "Error"
+  }
+]

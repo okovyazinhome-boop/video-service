@@ -391,6 +391,23 @@ function normalizeMediaItems(payload = {}) {
   return [];
 }
 
+function normalizeMergeItems(payload = {}) {
+  const sourceItems = Array.isArray(payload.videos) && payload.videos.length > 0
+    ? payload.videos
+    : Array.isArray(payload.videoUrls) && payload.videoUrls.length > 0
+    ? payload.videoUrls
+    : [];
+
+  return sourceItems
+    .filter((item) => typeof item === 'string' || (item && (item.url || item.videoUrl)))
+    .map((item) => {
+      if (typeof item === 'string') {
+        return { url: item };
+      }
+      return { url: item.url || item.videoUrl };
+    });
+}
+
 function formatAssTime(seconds) {
   const totalCs = Math.max(0, Math.round(Number(seconds || 0) * 100));
   const hours = Math.floor(totalCs / 360000);
@@ -1884,6 +1901,167 @@ async function prepareAudioFile(filePath) {
   throw new Error(`Cannot prepare audio file: ${path.basename(filePath)} — file may be corrupt or unsupported format`);
 }
 
+async function normalizeMergeClip(inputPath, outputPath, width, height, fps) {
+  await runFfmpeg([
+    '-y',
+    '-i', inputPath,
+    '-vf',
+    `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1,fps=${fps},format=yuv420p`,
+    '-af',
+    'aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo',
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-pix_fmt', 'yuv420p',
+    '-r', String(fps),
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-movflags', '+faststart',
+    outputPath
+  ]);
+}
+
+async function mergeClipsConcat(clips, outputPath) {
+  const concatListPath = path.join(path.dirname(outputPath), 'merge-list.txt');
+  const concatLines = clips.map((clip) => `file '${clip.path.replace(/'/g, "'\\''")}'`).join('\n');
+  await fs.writeFile(concatListPath, concatLines);
+  try {
+    await runFfmpeg([
+      '-y',
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', concatListPath,
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '192k',
+      '-movflags', '+faststart',
+      '-map_metadata', '-1',
+      '-map_chapters', '-1',
+      outputPath
+    ]);
+  } finally {
+    await fs.remove(concatListPath).catch(() => {});
+  }
+}
+
+async function mergeClipsXfade(clips, outputPath, transitionType, transitionDuration) {
+  const ffmpegArgs = ['-y'];
+  clips.forEach((clip) => {
+    ffmpegArgs.push('-i', clip.path);
+  });
+
+  const filterParts = [];
+  clips.forEach((_, index) => {
+    filterParts.push(`[${index}:v]setpts=PTS-STARTPTS[v${index}]`);
+    filterParts.push(`[${index}:a]asetpts=PTS-STARTPTS[a${index}]`);
+  });
+
+  let previousVideo = 'v0';
+  let previousAudio = 'a0';
+  let cumulativeDuration = clips[0].duration;
+
+  for (let i = 1; i < clips.length; i++) {
+    const videoLabel = `vx${i}`;
+    const audioLabel = `ax${i}`;
+    const offset = Math.max(0.1, cumulativeDuration - transitionDuration);
+    filterParts.push(
+      `[${previousVideo}][v${i}]xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${Number(offset.toFixed(3))}[${videoLabel}]`
+    );
+    filterParts.push(
+      `[${previousAudio}][a${i}]acrossfade=d=${transitionDuration}:c1=tri:c2=tri[${audioLabel}]`
+    );
+    previousVideo = videoLabel;
+    previousAudio = audioLabel;
+    cumulativeDuration += clips[i].duration - transitionDuration;
+  }
+
+  ffmpegArgs.push(
+    '-filter_complex', filterParts.join(';'),
+    '-map', `[${previousVideo}]`,
+    '-map', `[${previousAudio}]`,
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-movflags', '+faststart',
+    '-map_metadata', '-1',
+    '-map_chapters', '-1',
+    outputPath
+  );
+
+  await runFfmpeg(ffmpegArgs);
+}
+
+async function processMergeJob(jobId) {
+  const job = jobs.get(jobId);
+  if (!job) return;
+
+  try {
+    job.status = 'processing';
+
+    const jobDir = path.join(process.cwd(), 'storage', 'jobs', jobId);
+    await fs.ensureDir(jobDir);
+
+    const videos = normalizeMergeItems(job.payload);
+    if (videos.length < 2) {
+      throw new Error('videos must contain at least 2 items');
+    }
+
+    const { width, height, fps } = parseVideoSettings(job.payload);
+    const mergeMode = String(job.payload.mergeMode || 'xfade').trim().toLowerCase();
+    const transitionType = getAllowedTransition(job.payload.transitionType || 'fade');
+    const transitionDuration = Math.min(2, Math.max(0.05, Number(job.payload.transitionDuration ?? 0.35)));
+    const outputPath = path.join(process.cwd(), 'storage', 'output', `${jobId}.mp4`);
+
+    const clips = [];
+    for (let i = 0; i < videos.length; i++) {
+      const sourcePath = path.join(jobDir, `source_${i + 1}${getExtFromUrl(videos[i].url, '.mp4')}`);
+      const normalizedPath = path.join(jobDir, `clip_${i + 1}.mp4`);
+      await downloadToFile(videos[i].url, sourcePath);
+      await normalizeMergeClip(sourcePath, normalizedPath, width, height, fps);
+      clips.push({
+        path: normalizedPath,
+        duration: await getMediaDuration(normalizedPath)
+      });
+    }
+
+    if (mergeMode === 'cut') {
+      await mergeClipsConcat(clips, outputPath);
+    } else {
+      await mergeClipsXfade(clips, outputPath, transitionType, transitionDuration);
+    }
+
+    const thumbnailPath = path.join(process.cwd(), 'storage', 'output', `${jobId}.jpg`);
+    try {
+      await runFfmpeg([
+        '-y',
+        '-ss', '0',
+        '-i', outputPath,
+        '-vframes', '1',
+        '-q:v', '2',
+        '-vf', 'scale=320:-1',
+        thumbnailPath
+      ]);
+      job.thumbnailUrl = `${BASE_URL}/output/${jobId}.jpg`;
+    } catch (e) {
+      console.warn(`Thumbnail generation failed: ${e.message}`);
+      job.thumbnailUrl = null;
+    }
+
+    job.status = 'done';
+    job.videoUrl = `${BASE_URL}/output/${jobId}.mp4`;
+    job.error = null;
+    await sendWebhook(job);
+  } catch (error) {
+    job.status = 'fail';
+    job.error = error.message;
+    job.videoUrl = null;
+    await sendWebhook(job);
+  }
+}
+
 async function _processJobInner(jobId) {
   const job = jobs.get(jobId);
   if (!job) return;
@@ -2307,7 +2485,12 @@ async function processJob(jobId) {
   }
   activeJobs++;
   try {
-    await _processJobInner(jobId);
+    const job = jobs.get(jobId);
+    if (job?.type === 'merge') {
+      await processMergeJob(jobId);
+    } else {
+      await _processJobInner(jobId);
+    }
   } finally {
     activeJobs--;
   }
@@ -2398,6 +2581,63 @@ app.post('/render', authMiddleware, (req, res) => {
       logoUrl,
       logoPosition: String(logoPosition || 'top-right').trim(),
       wordTimings,
+      webhookUrl: String(webhookUrl || '').trim()
+    },
+    videoUrl: null,
+    thumbnailUrl: null,
+    error: null
+  });
+
+  processJob(jobId);
+
+  res.json({
+    ok: true,
+    jobId,
+    status: 'queued'
+  });
+});
+
+app.post('/merge', authMiddleware, (req, res) => {
+  const {
+    videos = [],
+    videoUrls = [],
+    mergeMode = 'xfade',
+    transitionType = 'fade',
+    transitionDuration = 0.35,
+    videoPreset = '',
+    orientation = '',
+    quality = '',
+    fps = '',
+    resolution = '1080x1920',
+    webhookUrl = ''
+  } = req.body || {};
+
+  const normalizedVideos = normalizeMergeItems({ videos, videoUrls });
+
+  if (normalizedVideos.length < 2) {
+    return res.status(400).json({
+      ok: false,
+      error: 'videos must contain at least 2 items'
+    });
+  }
+
+  const jobId = uuidv4();
+
+  jobs.set(jobId, {
+    jobId,
+    type: 'merge',
+    status: 'queued',
+    createdAt: new Date().toISOString(),
+    payload: {
+      videos: normalizedVideos,
+      mergeMode,
+      transitionType,
+      transitionDuration,
+      videoPreset,
+      orientation,
+      quality,
+      fps,
+      resolution,
       webhookUrl: String(webhookUrl || '').trim()
     },
     videoUrl: null,

@@ -3,7 +3,8 @@
     "name": "video",
     "label": "🎬 Video",
     "modules": [
-      "renderVideo"
+      "renderVideo",
+      "mergeVideos"
     ]
   }
 ]

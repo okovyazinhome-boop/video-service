@@ -1,0 +1,162 @@
+[
+  {
+    "name": "videos",
+    "type": "array",
+    "label": "Видео",
+    "required": true,
+    "spec": {
+      "type": "collection",
+      "label": "Видео",
+      "spec": [
+        {
+          "name": "url",
+          "type": "url",
+          "label": "Video URL",
+          "required": true,
+          "help": "Ссылка на готовый MP4 из Render Video или другого источника."
+        }
+      ]
+    },
+    "help": "Добавьте минимум 2 видео в правильном порядке."
+  },
+  {
+    "name": "mergeSettings",
+    "type": "collection",
+    "label": "Склейка",
+    "required": false,
+    "spec": [
+      {
+        "name": "mergeMode",
+        "type": "select",
+        "label": "Режим",
+        "required": false,
+        "default": "xfade",
+        "options": [
+          { "label": "Плавная склейка", "value": "xfade" },
+          { "label": "Без перехода", "value": "cut" }
+        ],
+        "help": "Плавная склейка скрывает шов между роликами."
+      },
+      {
+        "name": "transitionType",
+        "type": "select",
+        "label": "Переход",
+        "required": false,
+        "default": "fade",
+        "options": [
+          { "label": "Fade", "value": "fade" },
+          { "label": "Dissolve", "value": "dissolve" },
+          { "label": "Blur", "value": "hblur" },
+          { "label": "Smooth Left", "value": "smoothleft" },
+          { "label": "Smooth Right", "value": "smoothright" },
+          { "label": "Flash White", "value": "fadewhite" }
+        ],
+        "help": "Используется только в режиме плавной склейки."
+      },
+      {
+        "name": "transitionDuration",
+        "type": "number",
+        "label": "Длительность перехода, сек",
+        "required": false,
+        "default": 0.35,
+        "help": "Обычно 0.2–0.5 сек. Чем длиннее, тем заметнее переход."
+      }
+    ],
+    "help": "Как соединять готовые ролики между собой."
+  },
+  {
+    "name": "videoSettings",
+    "type": "collection",
+    "label": "Видео",
+    "required": false,
+    "spec": [
+      {
+        "name": "videoPreset",
+        "type": "select",
+        "label": "Пресет",
+        "required": false,
+        "default": "reels_1080_30",
+        "options": [
+          { "label": "Reels / Shorts — 9:16 Full HD 30 FPS", "value": "reels_1080_30" },
+          { "label": "Reels / Shorts — 9:16 Full HD 60 FPS", "value": "reels_1080_60" },
+          { "label": "Reels / Shorts — 9:16 2K 30 FPS", "value": "reels_2k_30" },
+          { "label": "YouTube — 16:9 2K 30 FPS", "value": "youtube_2k_30" },
+          { "label": "Квадрат — 1:1 Full HD 30 FPS", "value": "square_1080_30" }
+        ],
+        "help": "Должен совпадать с пресетом роликов, которые склеиваете."
+      },
+      {
+        "name": "orientation",
+        "type": "select",
+        "label": "Ориентация",
+        "required": false,
+        "default": "9:16",
+        "options": [
+          { "label": "9:16 — Shorts/Reels", "value": "9:16" },
+          { "label": "16:9 — YouTube", "value": "16:9" },
+          { "label": "1:1 — квадрат", "value": "1:1" }
+        ],
+        "help": "Все входные видео будут приведены к этой ориентации."
+      },
+      {
+        "name": "quality",
+        "type": "select",
+        "label": "Качество",
+        "required": false,
+        "default": "full-hd",
+        "options": [
+          { "label": "Full HD", "value": "full-hd" },
+          { "label": "2K", "value": "2k" }
+        ],
+        "help": "Все входные видео будут приведены к этому размеру."
+      },
+      {
+        "name": "fps",
+        "type": "select",
+        "label": "FPS",
+        "required": false,
+        "default": "30",
+        "options": [
+          { "label": "24", "value": "24" },
+          { "label": "25", "value": "25" },
+          { "label": "30", "value": "30" },
+          { "label": "50", "value": "50" },
+          { "label": "60", "value": "60" }
+        ],
+        "help": "Все входные видео будут приведены к этому FPS."
+      }
+    ],
+    "help": "Единый формат итогового ролика."
+  },
+  {
+    "name": "advancedMode",
+    "type": "select",
+    "label": "Дополнительно",
+    "required": false,
+    "default": "off",
+    "options": [
+      { "label": "Скрыть", "value": "off" },
+      {
+        "label": "Показать",
+        "value": "on",
+        "nested": [
+          {
+            "name": "webhookUrl",
+            "type": "url",
+            "label": "Webhook URL",
+            "required": false,
+            "help": "Сервис отправит результат на этот URL после завершения склейки."
+          },
+          {
+            "name": "resolution",
+            "type": "text",
+            "label": "Resolution fallback",
+            "required": false,
+            "help": "Техническое поле для старых сценариев: 1080x1920."
+          }
+        ]
+      }
+    ],
+    "help": "Webhook и технические параметры."
+  }
+]

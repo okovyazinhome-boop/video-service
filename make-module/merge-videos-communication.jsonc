@@ -1,0 +1,67 @@
+[
+  {
+    "url": "/merge",
+    "method": "POST",
+    "body": {
+      "videos": "{{parameters.videos}}",
+      "mergeMode": "{{if(get(parameters.mergeSettings, 'mergeMode'), get(parameters.mergeSettings, 'mergeMode'), 'xfade')}}",
+      "transitionType": "{{if(get(parameters.mergeSettings, 'transitionType'), get(parameters.mergeSettings, 'transitionType'), 'fade')}}",
+      "transitionDuration": "{{if(get(parameters.mergeSettings, 'transitionDuration'), get(parameters.mergeSettings, 'transitionDuration'), 0.35)}}",
+      "videoPreset": "{{if(get(parameters.videoSettings, 'videoPreset'), get(parameters.videoSettings, 'videoPreset'), 'reels_1080_30')}}",
+      "orientation": "{{if(get(parameters.videoSettings, 'orientation'), get(parameters.videoSettings, 'orientation'), '9:16')}}",
+      "quality": "{{if(get(parameters.videoSettings, 'quality'), get(parameters.videoSettings, 'quality'), 'full-hd')}}",
+      "fps": "{{if(get(parameters.videoSettings, 'fps'), get(parameters.videoSettings, 'fps'), '30')}}",
+      "resolution": "{{if(get(parameters.advancedMode, 'resolution'), get(parameters.advancedMode, 'resolution'), omit)}}",
+      "webhookUrl": "{{if(get(parameters.advancedMode, 'webhookUrl'), get(parameters.advancedMode, 'webhookUrl'), omit)}}"
+    },
+    "response": {
+      "valid": "{{body.ok === true}}",
+      "error": {
+        "type": "RuntimeError",
+        "message": "[{{statusCode}}] {{body.error}}"
+      },
+      "temp": {
+        "jobId": "{{body.jobId}}"
+      }
+    }
+  },
+  {
+    "url": "/status/{{temp.jobId}}",
+    "method": "GET",
+    "response": {
+      "valid": "{{body.ok === true}}",
+      "error": {
+        "type": "RuntimeError",
+        "message": "[{{statusCode}}] {{body.error}}"
+      },
+      "temp": {
+        "jobId": "{{temp.jobId}}",
+        "status": "{{body.status}}",
+        "queuePosition": "{{body.queuePosition}}"
+      }
+    },
+    "repeat": {
+      "condition": "{{temp.status !== 'done' && temp.status !== 'fail'}}",
+      "delay": 10000,
+      "limit": 720
+    }
+  },
+  {
+    "url": "/result/{{temp.jobId}}",
+    "method": "GET",
+    "response": {
+      "valid": "{{body.ok === true && body.status === 'done'}}",
+      "error": {
+        "type": "RuntimeError",
+        "message": "{{if(body.status === 'fail', 'Merge failed: ' + (body.error || 'Unknown error'), '[' + statusCode + '] ' + (body.error || 'Unknown error'))}}"
+      },
+      "output": {
+        "jobId": "{{body.jobId}}",
+        "status": "{{body.status}}",
+        "videoUrl": "{{body.videoUrl}}",
+        "thumbnailUrl": "{{body.thumbnailUrl}}",
+        "error": "{{body.error}}"
+      }
+    }
+  }
+]
