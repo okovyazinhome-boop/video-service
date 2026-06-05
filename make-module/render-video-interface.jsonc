@@ -15,6 +15,11 @@
     "label": "Video URL"
   },
   {
+    "name": "thumbnailUrl",
+    "type": "url",
+    "label": "Thumbnail URL"
+  },
+  {
     "name": "error",
     "type": "text",
     "label": "Error"

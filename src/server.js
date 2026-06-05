@@ -109,6 +109,86 @@ function parseResolution(resolution) {
   return { width, height };
 }
 
+function parseFps(fps) {
+  const allowed = [24, 25, 30, 50, 60];
+  const parsed = Number(fps);
+  return allowed.includes(parsed) ? parsed : 25;
+}
+
+function getResolutionFromFormat({ videoPreset, orientation, quality, resolution }) {
+  const presets = {
+    reels_1080_30: { orientation: '9:16', quality: 'full-hd' },
+    reels_1080_60: { orientation: '9:16', quality: 'full-hd' },
+    reels_2k_30: { orientation: '9:16', quality: '2k' },
+    youtube_2k_30: { orientation: '16:9', quality: '2k' },
+    square_1080_30: { orientation: '1:1', quality: 'full-hd' }
+  };
+
+  const preset = presets[String(videoPreset || '').trim()];
+  const finalOrientation = String(orientation || preset?.orientation || '').trim() || null;
+  const finalQuality = String(quality || preset?.quality || '').trim() || null;
+
+  if (finalOrientation && finalQuality) {
+    const byQuality = {
+      'full-hd': {
+        '9:16': { width: 1080, height: 1920 },
+        '16:9': { width: 1920, height: 1080 },
+        '1:1': { width: 1080, height: 1080 }
+      },
+      '2k': {
+        '9:16': { width: 1440, height: 2560 },
+        '16:9': { width: 2560, height: 1440 },
+        '1:1': { width: 1440, height: 1440 }
+      }
+    };
+
+    const found = byQuality[finalQuality]?.[finalOrientation];
+    if (found) return found;
+  }
+
+  return parseResolution(resolution);
+}
+
+function parseVideoSettings(payload = {}) {
+  const videoSettings = payload.videoSettings || {};
+  const videoPreset = payload.videoPreset || videoSettings.videoPreset;
+  const presetFps = {
+    reels_1080_30: 30,
+    reels_1080_60: 60,
+    reels_2k_30: 30,
+    youtube_2k_30: 30,
+    square_1080_30: 30
+  }[String(videoPreset || '').trim()];
+
+  const resolution = getResolutionFromFormat({
+    videoPreset,
+    orientation: payload.orientation || videoSettings.orientation,
+    quality: payload.quality || videoSettings.quality,
+    resolution: payload.resolution || videoSettings.resolution
+  });
+
+  return {
+    ...resolution,
+    fps: parseFps(payload.fps || videoSettings.fps || presetFps),
+    bitratePreset: String(payload.bitratePreset || videoSettings.bitratePreset || 'standard').trim(),
+    cleanMetadata: payload.cleanMetadata !== false && videoSettings.cleanMetadata !== false
+  };
+}
+
+function getVideoBitrate(width, height, fps, bitratePreset = 'standard') {
+  const pixels = width * height;
+  const fpsMultiplier = fps >= 50 ? 1.35 : 1;
+  const qualityMultiplier = {
+    fast: 0.75,
+    standard: 1,
+    high: 1.45,
+    ultra: 1.9
+  }[String(bitratePreset || 'standard')] || 1;
+
+  const baseMbps = pixels >= 2560 * 1440 ? 14 : pixels >= 1920 * 1080 ? 8 : 5;
+  return `${Math.round(baseMbps * fpsMultiplier * qualityMultiplier)}M`;
+}
+
 async function downloadToFile(fileUrl, outputPath) {
   const response = await axios({
     method: 'get',
@@ -218,33 +298,73 @@ function guessMediaTypeFromUrl(fileUrl = '') {
   }
 }
 
-function normalizeMediaItems(payload = {}) {
-  if (Array.isArray(payload.media) && payload.media.length > 0) {
-    return payload.media
-      .filter((item) => item && item.url)
-      .map((item) => ({
-        type: item.type || guessMediaTypeFromUrl(item.url),
-        url: item.url,
-        narrationText: String(item.narrationText || '').trim(),
-        sceneRole: String(item.sceneRole || '').trim(),
-        overlayText: String(item.overlayText || '').trim()
-      }));
-  }
+function parseOptionalPositiveNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
 
-  if (Array.isArray(payload.images) && payload.images.length > 0) {
-    // images может быть массивом строк (URL) или объектов {url, overlayText}
-    return payload.images.map((item) => {
-      if (typeof item === 'string') {
-        return { type: guessMediaTypeFromUrl(item), url: item, narrationText: '', sceneRole: '', overlayText: '' };
-      }
-      return {
-        type: item.type || guessMediaTypeFromUrl(item.url || ''),
-        url: item.url || item,
-        narrationText: String(item.narrationText || '').trim(),
-        sceneRole: String(item.sceneRole || '').trim(),
-        overlayText: String(item.overlayText || '').trim()
-      };
-    });
+function normalizeMotionSettings(item = {}) {
+  const motion = item.motionSettings || item.motion || {};
+  const rawZoomPercent = Number(item.zoomPercent ?? motion.zoomPercent ?? 20);
+  return {
+    type: String(item.motionType || motion.type || motion.motionType || 'auto').trim().toLowerCase(),
+    zoomPercent: Number.isFinite(rawZoomPercent) ? Math.min(300, Math.max(0, rawZoomPercent)) : 20,
+    zoomAt: parseOptionalPositiveNumber(item.zoomAt ?? motion.zoomAt),
+    direction: String(item.motionDirection || motion.direction || motion.motionDirection || 'center').trim().toLowerCase()
+  };
+}
+
+function normalizeOverlayStyle(item = {}) {
+  return item.overlayStyle || item.captionStyle || item.overlaySettings || {};
+}
+
+function normalizeVideoBehavior(item = {}) {
+  const value = String(item.videoBehavior || item.videoMode || 'clip').trim().toLowerCase();
+  if (['loop', 'freeze', 'clip'].includes(value)) return value;
+  if (value === 'trim' || value === 'trim-to-source' || value === 'source') return 'clip';
+  return 'clip';
+}
+
+function normalizeMediaItems(payload = {}) {
+  const sourceItems = Array.isArray(payload.frames) && payload.frames.length > 0
+    ? payload.frames
+    : Array.isArray(payload.media) && payload.media.length > 0
+    ? payload.media
+    : Array.isArray(payload.images) && payload.images.length > 0
+    ? payload.images
+    : [];
+
+  if (sourceItems.length > 0) {
+    return sourceItems
+      .filter((item) => typeof item === 'string' || (item && (item.url || item.fileUrl)))
+      .map((item) => {
+        if (typeof item === 'string') {
+          return {
+            type: guessMediaTypeFromUrl(item),
+            url: item,
+            narrationText: '',
+            sceneRole: '',
+            overlayText: '',
+            durationSeconds: null,
+            overlayStyle: {},
+            motionSettings: normalizeMotionSettings({}),
+            videoBehavior: 'clip'
+          };
+        }
+        const url = item.url || item.fileUrl || item;
+        return {
+          type: item.type || guessMediaTypeFromUrl(url || ''),
+          url,
+          narrationText: String(item.narrationText || '').trim(),
+          sceneRole: String(item.sceneRole || '').trim(),
+          overlayText: String(item.overlayText || item.captionText || '').trim(),
+          durationSeconds: parseOptionalPositiveNumber(item.durationSeconds ?? item.duration ?? item.sceneDuration),
+          overlayStyle: normalizeOverlayStyle(item),
+          motionSettings: normalizeMotionSettings(item),
+          videoBehavior: normalizeVideoBehavior(item)
+        };
+      });
   }
 
   return [];
@@ -655,6 +775,60 @@ function allocateDurationsByWeights(texts, totalDuration, minBlockDuration = 0.8
   });
 }
 
+function allocateAutoDurations({
+  mediaItems,
+  blockTexts,
+  voiceDuration,
+  transitionDuration = 0,
+  minBlockDuration = 0.8
+}) {
+  const durations = Array.from({ length: mediaItems.length }, () => null);
+  let fixedTotal = 0;
+  const autoIndexes = [];
+
+  mediaItems.forEach((item, index) => {
+    const manualDuration = parseOptionalPositiveNumber(item.durationSeconds);
+    const sourceDuration = parseOptionalPositiveNumber(item.sourceDuration);
+
+    if (manualDuration) {
+      durations[index] = manualDuration;
+      fixedTotal += manualDuration;
+      return;
+    }
+
+    if (item.type === 'video' && item.videoBehavior === 'clip' && sourceDuration) {
+      const visibleSourceDuration = index < mediaItems.length - 1
+        ? Math.max(0.1, sourceDuration - transitionDuration)
+        : sourceDuration;
+      durations[index] = visibleSourceDuration;
+      fixedTotal += visibleSourceDuration;
+      return;
+    }
+
+    autoIndexes.push(index);
+  });
+
+  const remainingDuration = Math.max(0, Number(voiceDuration || 0) - fixedTotal);
+
+  if (autoIndexes.length > 0) {
+    const autoTexts = autoIndexes.map((index) => blockTexts[index] || '');
+    const allocated = allocateDurationsByWeights(
+      autoTexts,
+      remainingDuration > 0 ? remainingDuration : autoIndexes.length * minBlockDuration,
+      minBlockDuration
+    );
+
+    autoIndexes.forEach((index, autoIndex) => {
+      durations[index] = allocated[autoIndex];
+    });
+  } else if (fixedTotal < voiceDuration && durations.length > 0) {
+    const lastIndex = durations.length - 1;
+    durations[lastIndex] += voiceDuration - fixedTotal;
+  }
+
+  return durations.map((duration) => Math.max(0.1, Number(duration || minBlockDuration)));
+}
+
 function buildScenePlan({
   mediaItems,
   voiceDuration,
@@ -668,17 +842,31 @@ function buildScenePlan({
     ? mediaItems.map((item) => item.narrationText.trim())
     : splitTextIntoSemanticBlocks(subtitlesText, mediaItems.length);
 
-  const visibleDurations = allocateDurationsByWeights(
+  const visibleDurations = allocateAutoDurations({
+    mediaItems,
     blockTexts,
     voiceDuration,
-    Number(subtitleStyle.minSceneDuration) || 0.8
-  );
+    transitionDuration,
+    minBlockDuration: Number(subtitleStyle.minSceneDuration) || 0.8
+  });
 
   let visibleStart = 0;
 
   return mediaItems.map((item, index) => {
-    const visibleDuration = visibleDurations[index];
-    const inputDuration = index < mediaItems.length - 1
+    const isClipVideo = item.type === 'video' &&
+      item.videoBehavior === 'clip' &&
+      item.sourceDuration;
+    const sourceDuration = Number(item.sourceDuration || 0);
+    const visibleDuration = isClipVideo && index < mediaItems.length - 1
+      ? Math.max(0.1, Math.min(visibleDurations[index], sourceDuration - transitionDuration))
+      : isClipVideo
+      ? Math.min(visibleDurations[index], sourceDuration)
+      : visibleDurations[index];
+    const inputDuration = isClipVideo
+      ? index < mediaItems.length - 1
+        ? Math.min(sourceDuration, visibleDuration + transitionDuration)
+        : visibleDuration
+      : index < mediaItems.length - 1
       ? visibleDuration + transitionDuration
       : visibleDuration;
 
@@ -1081,6 +1269,16 @@ const MOTION_PRESETS = [
   { dir: 'zoom-out-right',      zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.75, yFactor: 0.50 }
 ];
 
+const MOTION_DIRECTIONS = {
+  center: { xFactor: 0.50, yFactor: 0.50 },
+  'top-left': { xFactor: 0.20, yFactor: 0.20 },
+  'top-right': { xFactor: 0.80, yFactor: 0.20 },
+  'bottom-left': { xFactor: 0.20, yFactor: 0.80 },
+  'bottom-right': { xFactor: 0.80, yFactor: 0.80 },
+  left: { xFactor: 0.25, yFactor: 0.50 },
+  right: { xFactor: 0.75, yFactor: 0.50 }
+};
+
 function getImageMotionPreset(sceneIndex, motionPresetName) {
   if (motionPresetName) {
     const found = MOTION_PRESETS.find((p) => p.dir === motionPresetName);
@@ -1089,27 +1287,81 @@ function getImageMotionPreset(sceneIndex, motionPresetName) {
   return MOTION_PRESETS[sceneIndex % MOTION_PRESETS.length];
 }
 
-function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetName) {
-  const duration = Number(scene.inputDuration.toFixed(3));
+function normalizeImageMotion(scene, sceneIndex, motionPresetName) {
+  const frameMotion = scene.motionSettings || {};
+  const type = String(frameMotion.type || 'auto').trim().toLowerCase();
 
-  // Если motion отключён — просто scale+crop без zoompan
-  if (motionPresetName === 'none') {
-    return `[${sceneIndex}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-      `crop=${width}:${height},` +
-      `setsar=1,fps=25,format=yuv420p,trim=duration=${duration},setpts=PTS-STARTPTS[v${sceneIndex}]`;
+  if (type === 'none' || type === 'off' || type === 'disabled') {
+    return { type: 'none' };
   }
 
-  const frames = Math.max(1, Math.ceil(Number(scene.inputDuration || 0) * 25));
-  const motion = getImageMotionPreset(sceneIndex, motionPresetName);
+  if (type === 'auto') {
+    const preset = getImageMotionPreset(sceneIndex, motionPresetName);
+    return {
+      type: preset.zoomStep >= 0 ? 'smooth-in' : 'smooth-out',
+      zoomStart: preset.zoomStart,
+      zoomEnd: preset.zoomStep >= 0 ? preset.zoomMax : (preset.zoomMin || 1),
+      xFactor: preset.xFactor,
+      yFactor: preset.yFactor
+    };
+  }
+
+  const direction = MOTION_DIRECTIONS[frameMotion.direction] || MOTION_DIRECTIONS.center;
+  const zoomScale = 1 + (Math.min(300, Math.max(0, Number(frameMotion.zoomPercent || 20))) / 100);
+
+  if (type === 'sharp' || type === 'sharp-zoom' || type === 'sharp-zoom-in') {
+    return {
+      type: 'sharp',
+      zoomStart: 1,
+      zoomEnd: zoomScale,
+      zoomAt: frameMotion.zoomAt,
+      xFactor: direction.xFactor,
+      yFactor: direction.yFactor
+    };
+  }
+
+  if (type === 'smooth-out' || type === 'zoom-out') {
+    return {
+      type: 'smooth-out',
+      zoomStart: zoomScale,
+      zoomEnd: 1,
+      xFactor: direction.xFactor,
+      yFactor: direction.yFactor
+    };
+  }
+
+  return {
+    type: 'smooth-in',
+    zoomStart: 1,
+    zoomEnd: zoomScale,
+    xFactor: direction.xFactor,
+    yFactor: direction.yFactor
+  };
+}
+
+function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetName, fps) {
+  const duration = Number(scene.inputDuration.toFixed(3));
+  const outputFps = parseFps(fps);
+  const motion = normalizeImageMotion(scene, sceneIndex, motionPresetName);
+
+  // Если motion отключён — просто scale+crop без zoompan
+  if (motion.type === 'none') {
+    return `[${sceneIndex}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
+      `crop=${width}:${height},` +
+      `setsar=1,fps=${outputFps},format=yuv420p,trim=duration=${duration},setpts=PTS-STARTPTS[v${sceneIndex}]`;
+  }
+
+  const frames = Math.max(1, Math.ceil(Number(scene.inputDuration || 0) * outputFps));
   const xExpr = `(iw-iw/zoom)*${motion.xFactor}`;
   const yExpr = `(ih-ih/zoom)*${motion.yFactor}`;
 
   let zExpr;
-  if (motion.zoomStep >= 0) {
-    zExpr = `if(lte(on,1),${motion.zoomStart},min(zoom+${motion.zoomStep},${motion.zoomMax}))`;
+  if (motion.type === 'sharp') {
+    const triggerFrame = Math.max(1, Math.round(Number(motion.zoomAt || (duration / 2)) * outputFps));
+    zExpr = `if(lt(on,${triggerFrame}),${motion.zoomStart},${motion.zoomEnd})`;
   } else {
-    const zMin = motion.zoomMin != null ? motion.zoomMin : 1.0;
-    zExpr = `if(lte(on,1),${motion.zoomStart},max(zoom${motion.zoomStep},${zMin}))`;
+    const denominator = Math.max(1, frames - 1);
+    zExpr = `${motion.zoomStart}+(${motion.zoomEnd}-${motion.zoomStart})*on/${denominator}`;
   }
 
   return `[${sceneIndex}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
@@ -1118,7 +1370,7 @@ function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetNa
     `z='${zExpr}':` +
     `x='${xExpr}':` +
     `y='${yExpr}':` +
-    `d=${frames}:s=${width}x${height}:fps=25,` +
+    `d=${frames}:s=${width}x${height}:fps=${outputFps},` +
     `setsar=1,format=yuv420p,trim=duration=${duration},setpts=PTS-STARTPTS[v${sceneIndex}]`;
 }
 
@@ -1138,6 +1390,13 @@ function hexToFfmpegColor(colorStr, opacity) {
   const alpha = Math.round(Math.min(1, Math.max(0, Number(opacity ?? 1))) * 255);
   const alphaHex = alpha.toString(16).padStart(2, '0').toUpperCase();
   return `0x${hex.toUpperCase()}${alphaHex}`;
+}
+
+function getSceneOverlayStyle(sceneOverlayStyle = {}, globalOverlayStyle = {}) {
+  return {
+    ...globalOverlayStyle,
+    ...sceneOverlayStyle
+  };
 }
 
 /**
@@ -1170,7 +1429,7 @@ function buildSceneDrawtextFilter(text, inputLabel, outputLabel, overlayStyle, w
   // Экранирование текста для FFmpeg drawtext
   const safeText = text
     .replace(/\\/g, '\\\\')
-    .replace(/'/g, "'")
+    .replace(/'/g, "\\'")
     .replace(/:/g, '\\:')
     .replace(/\n/g, ' ');
 
@@ -1516,7 +1775,8 @@ async function _processJobInner(jobId) {
     const musicUrl = job.payload.musicMp3;
     const musicVolume = Number(job.payload.musicVolume ?? 0.15);
     const transitionType = getAllowedTransition(job.payload.transitionType);
-    const { width, height } = parseResolution(job.payload.resolution);
+    const { width, height, fps, bitratePreset, cleanMetadata } = parseVideoSettings(job.payload);
+    const videoBitrate = getVideoBitrate(width, height, fps, bitratePreset);
     // Парсим *ключевые слова* из оригинального текста ДО очистки
     const { cleanText: subtitlesText, keywords: highlightKeywords } = parseKeywordsFromText(String(job.payload.subtitlesText || '').trim());
     const subtitleStyle = job.payload.subtitleStyle || {};
@@ -1584,36 +1844,6 @@ async function _processJobInner(jobId) {
       throw new Error('Invalid voice duration');
     }
 
-    // Зацикливаем музыку до длительности голоса (заменяет -stream_loop в финальном FFmpeg)
-    if (musicUrl && musicPath) {
-      const loopedMusicPath = musicPath + '.looped.mp3';
-      try {
-        const musicDuration = await getMediaDuration(musicPath);
-        if (musicDuration > 0 && musicDuration < voiceDuration + 5) {
-          // Музыка короче видео — нужно зациклить
-          const loopCount = Math.ceil((voiceDuration + 5) / musicDuration);
-          // Создаём concat-файл для зацикливания
-          const concatListPath = musicPath + '.concat.txt';
-          const concatLines = Array(loopCount).fill(`file '${musicPath}'`).join('\n');
-          await fs.writeFile(concatListPath, concatLines);
-          await runFfmpeg([
-            '-y', '-f', 'concat', '-safe', '0',
-            '-i', concatListPath,
-            '-t', String(Math.ceil(voiceDuration + 5)),
-            '-c:a', 'libmp3lame', '-q:a', '2',
-            loopedMusicPath
-          ]);
-          await fs.move(loopedMusicPath, musicPath, { overwrite: true });
-          await fs.remove(concatListPath).catch(() => {});
-          console.log(`[music] Looped ${loopCount}x to cover ${voiceDuration.toFixed(1)}s`);
-        }
-        // Если музыка длиннее видео — используем как есть, ffmpeg обрежет по -shortest
-      } catch (loopErr) {
-        await fs.remove(loopedMusicPath).catch(() => {});
-        console.warn(`[music] Loop failed: ${loopErr.message} — using original music file`);
-      }
-    }
-
     let transitionDuration = 0;
     if (preparedMedia.length > 1) {
       const safeTransition = Math.min(
@@ -1630,12 +1860,43 @@ async function _processJobInner(jobId) {
       subtitleStyle,
       transitionDuration
     });
+    const finalVideoDuration = scenePlan.length
+      ? scenePlan[scenePlan.length - 1].visibleEnd
+      : voiceDuration;
+    const audioPadDuration = Math.max(0, Number((finalVideoDuration - voiceDuration).toFixed(3)));
+
+    // Зацикливаем музыку до фактической длительности ролика.
+    if (musicUrl && musicPath) {
+      const loopedMusicPath = musicPath + '.looped.mp3';
+      try {
+        const musicDuration = await getMediaDuration(musicPath);
+        if (musicDuration > 0 && musicDuration < finalVideoDuration + 5) {
+          const loopCount = Math.ceil((finalVideoDuration + 5) / musicDuration);
+          const concatListPath = musicPath + '.concat.txt';
+          const concatLines = Array(loopCount).fill(`file '${musicPath}'`).join('\n');
+          await fs.writeFile(concatListPath, concatLines);
+          await runFfmpeg([
+            '-y', '-f', 'concat', '-safe', '0',
+            '-i', concatListPath,
+            '-t', String(Math.ceil(finalVideoDuration + 5)),
+            '-c:a', 'libmp3lame', '-q:a', '2',
+            loopedMusicPath
+          ]);
+          await fs.move(loopedMusicPath, musicPath, { overwrite: true });
+          await fs.remove(concatListPath).catch(() => {});
+          console.log(`[music] Looped ${loopCount}x to cover ${finalVideoDuration.toFixed(1)}s`);
+        }
+      } catch (loopErr) {
+        await fs.remove(loopedMusicPath).catch(() => {});
+        console.warn(`[music] Loop failed: ${loopErr.message} — using original music file`);
+      }
+    }
 
     if (subtitlesText || scenePlan.some((scene) => scene.blockText)) {
       const assContent = buildAssContent({
         width,
         height,
-        duration: voiceDuration,
+        duration: finalVideoDuration,
         subtitlesText,
         subtitleStyle,
         scenePlan,
@@ -1695,7 +1956,7 @@ async function _processJobInner(jobId) {
 
       if (scene.type === 'image') {
         filterParts.push(
-          buildImageMotionFilter(scene, i, width, height, subtitleStyle.motionPreset)
+          buildImageMotionFilter(scene, i, width, height, subtitleStyle.motionPreset, fps)
         );
       } else {
         const padDuration = Math.max(0, Number(scene.inputDuration) - Number(scene.sourceDuration || 0));
@@ -1703,11 +1964,13 @@ async function _processJobInner(jobId) {
           `scale=${width}:${height}:force_original_aspect_ratio=increase`,
           `crop=${width}:${height}`,
           `setsar=1`,
-          `fps=25`,
+          `fps=${fps}`,
           `format=yuv420p`
         ];
 
-        if (padDuration > 0.02) {
+        if (scene.videoBehavior === 'loop' && padDuration > 0.02) {
+          videoFilters.push(`loop=loop=-1:size=${Math.max(1, Math.ceil(Number(scene.sourceDuration || 1) * fps))}:start=0`);
+        } else if (scene.videoBehavior === 'freeze' && padDuration > 0.02) {
           videoFilters.push(`tpad=stop_mode=clone:stop_duration=${Number(padDuration.toFixed(3))}`);
         }
 
@@ -1724,7 +1987,15 @@ async function _processJobInner(jobId) {
       if (sceneOverlayText) {
         const dtLabel = `vdt${i}`;
         filterParts.push(
-          buildSceneDrawtextFilter(sceneOverlayText, `v${i}`, dtLabel, overlayStyle, width, height, fontsDir)
+          buildSceneDrawtextFilter(
+            sceneOverlayText,
+            `v${i}`,
+            dtLabel,
+            getSceneOverlayStyle(scene.overlayStyle, overlayStyle),
+            width,
+            height,
+            fontsDir
+          )
         );
         // Переименовываем лейбл сцены так, чтобы xfade использовал уже с надписью
         filterParts.push(`[${dtLabel}]null[v${i}r]`);
@@ -1810,14 +2081,24 @@ async function _processJobInner(jobId) {
     }
 
     if (musicUrl && musicPath && musicInputIndex !== null) {
+      const voiceFilters = [
+        `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo`
+      ];
+      if (audioPadDuration > 0.02) {
+        voiceFilters.push(`apad=pad_dur=${audioPadDuration}`);
+      }
       filterParts.push(
-        `[${voiceInputIndex}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[voice]`
+        `[${voiceInputIndex}:a]${voiceFilters.join(',')}[voice]`
       );
       filterParts.push(
         `[${musicInputIndex}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=${musicVolume}[music]`
       );
       filterParts.push(
         `[voice][music]amix=inputs=2:duration=first:dropout_transition=2[a]`
+      );
+    } else if (audioPadDuration > 0.02) {
+      filterParts.push(
+        `[${voiceInputIndex}:a]apad=pad_dur=${audioPadDuration}[voiceOnly]`
       );
     }
 
@@ -1829,6 +2110,8 @@ async function _processJobInner(jobId) {
 
     if (musicUrl && musicPath && musicInputIndex !== null) {
       ffmpegArgs.push('-map', '[a]');
+    } else if (audioPadDuration > 0.02) {
+      ffmpegArgs.push('-map', '[voiceOnly]');
     } else {
       ffmpegArgs.push('-map', `${voiceInputIndex}:a`);
     }
@@ -1836,14 +2119,28 @@ async function _processJobInner(jobId) {
     ffmpegArgs.push(
       '-c:v', 'libx264',
       '-preset', 'veryfast',
+      '-b:v', videoBitrate,
       '-pix_fmt', 'yuv420p',
-      '-r', '25',
+      '-r', String(fps),
       '-c:a', 'aac',
       '-b:a', '192k',
       '-movflags', '+faststart',
       '-shortest',
       outputPath
     );
+
+    if (cleanMetadata) {
+      ffmpegArgs.splice(ffmpegArgs.length - 1, 0,
+        '-x264-params', 'no-info=1',
+        '-map_metadata', '-1',
+        '-map_chapters', '-1',
+        '-metadata', 'title=',
+        '-metadata', 'artist=',
+        '-metadata', 'comment=',
+        '-metadata', 'description=',
+        '-metadata', 'encoder='
+      );
+    }
 
     // Логируем финальную FFmpeg-команду для отладки
     console.log(`[ffmpeg] Final command: ffmpeg ${ffmpegArgs.join(' ').substring(0, 2000)}`);
@@ -1909,6 +2206,7 @@ app.get('/health', (req, res) => {
 
 app.post('/render', authMiddleware, (req, res) => {
   const {
+    frames = [],
     media = [],
     images = [],
     voiceMp3 = '',
@@ -1916,6 +2214,13 @@ app.post('/render', authMiddleware, (req, res) => {
     musicVolume = 0.15,
     subtitlesText = '',
     transitionType = 'fade',
+    videoPreset = '',
+    orientation = '',
+    quality = '',
+    fps = '',
+    bitratePreset = '',
+    cleanMetadata = true,
+    videoSettings = {},
     resolution = '1080x1920',
     subtitleStyle = {},
     overlayStyle = {},
@@ -1925,7 +2230,7 @@ app.post('/render', authMiddleware, (req, res) => {
     webhookUrl = ''
   } = req.body || {};
 
-  const normalizedMedia = normalizeMediaItems({ media, images });
+  const normalizedMedia = normalizeMediaItems({ frames, media, images });
 
   if (!normalizedMedia.length) {
     return res.status(400).json({
@@ -1949,12 +2254,20 @@ app.post('/render', authMiddleware, (req, res) => {
     createdAt: new Date().toISOString(),
     payload: {
       media: normalizedMedia,
+      frames,
       images,
       voiceMp3,
       musicMp3,
       musicVolume,
       subtitlesText,
       transitionType,
+      videoPreset,
+      orientation,
+      quality,
+      fps,
+      bitratePreset,
+      cleanMetadata,
+      videoSettings,
       resolution,
       subtitleStyle,
       overlayStyle,

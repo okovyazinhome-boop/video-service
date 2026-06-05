@@ -1,5 +1,4 @@
 [
-  // ===== ШАГ 1: Создание задачи рендера =====
   {
     "url": "/render",
     "method": "POST",
@@ -10,35 +9,29 @@
       "musicVolume": "{{if(parameters.musicVolume, parameters.musicVolume, 0.15)}}",
       "subtitlesText": "{{if(parameters.subtitlesText, parameters.subtitlesText, omit)}}",
       "wordTimings": "{{if(parameters.wordTimings, parameters.wordTimings, omit)}}",
-      "transitionType": "{{if(parameters.transitionType, parameters.transitionType, 'fade')}}",
-      "resolution": "{{if(parameters.resolution, parameters.resolution, '1080x1920')}}",
-      "logoUrl": "{{if(parameters.logoUrl, parameters.logoUrl, omit)}}",
-      "logoPosition": "{{if(parameters.logoPosition, parameters.logoPosition, 'top-right')}}",
-      "webhookUrl": "{{if(parameters.webhookUrl, parameters.webhookUrl, omit)}}",
+      "videoPreset": "{{if(get(parameters.videoSettings, 'videoPreset'), get(parameters.videoSettings, 'videoPreset'), 'reels_1080_30')}}",
+      "orientation": "{{if(get(parameters.videoSettings, 'orientation'), get(parameters.videoSettings, 'orientation'), '9:16')}}",
+      "quality": "{{if(get(parameters.videoSettings, 'quality'), get(parameters.videoSettings, 'quality'), 'full-hd')}}",
+      "fps": "{{if(get(parameters.videoSettings, 'fps'), get(parameters.videoSettings, 'fps'), '30')}}",
+      "transitionType": "{{if(get(parameters.videoSettings, 'transitionType'), get(parameters.videoSettings, 'transitionType'), 'fade')}}",
+      "bitratePreset": "{{if(get(parameters.videoSettings, 'bitratePreset'), get(parameters.videoSettings, 'bitratePreset'), 'standard')}}",
+      "resolution": "{{if(get(parameters.advancedSettings, 'resolution'), get(parameters.advancedSettings, 'resolution'), omit)}}",
+      "logoUrl": "{{if(get(parameters.brandSettings, 'logoUrl'), get(parameters.brandSettings, 'logoUrl'), omit)}}",
+      "logoPosition": "{{if(get(parameters.brandSettings, 'logoPosition'), get(parameters.brandSettings, 'logoPosition'), 'top-right')}}",
+      "webhookUrl": "{{if(get(parameters.advancedSettings, 'webhookUrl'), get(parameters.advancedSettings, 'webhookUrl'), omit)}}",
+      "cleanMetadata": "{{if(get(parameters.advancedSettings, 'cleanMetadata') !== undefined, get(parameters.advancedSettings, 'cleanMetadata'), true)}}",
       "subtitleStyle": {
-        "mode": "{{if(parameters.subtitleMode, parameters.subtitleMode, 'word-highlight')}}",
-        "position": "{{if(parameters.subtitlePosition, parameters.subtitlePosition, 'bottom')}}",
-        "animation": "{{if(parameters.subtitleAnimation, parameters.subtitleAnimation, 'fade')}}",
-        "fontName": "{{if(parameters.fontName, parameters.fontName, 'Inter')}}",
-        "fontSize": "{{if(parameters.fontSize, parameters.fontSize, omit)}}",
-        "primaryColor": "{{ifempty(parameters.primaryColor, '#FFFFFF')}}",
-        "outlineColor": "{{ifempty(parameters.outlineColor, '#000000')}}",
-        "activeWordTextColor": "{{if(parameters.activeWordTextColor, parameters.activeWordTextColor, omit)}}",
-        "activeWordBackColor": "{{if(parameters.activeWordBackColor, parameters.activeWordBackColor, omit)}}",
-        "keywordColor": "{{ifempty(parameters.keywordColor, '#FFD700')}}",
-        "bold": "{{if(parameters.bold !== undefined, parameters.bold, true)}}",
-        "motionPreset": "{{if(parameters.motionPreset && parameters.motionPreset !== 'auto', parameters.motionPreset, omit)}}"
-      },
-      "overlayStyle": {
-        "fontName": "{{if(parameters.overlayFontName, parameters.overlayFontName, 'Inter')}}",
-        "fontSize": "{{if(parameters.overlayFontSize, parameters.overlayFontSize, omit)}}",
-        "fontColor": "{{if(parameters.overlayFontColor, parameters.overlayFontColor, '#FFFFFF')}}",
-        "position": "{{if(parameters.overlayPosition, parameters.overlayPosition, 'top')}}",
-        "bgColor": "{{if(parameters.overlayBgColor, parameters.overlayBgColor, '#000000')}}",
-        "bgOpacity": "{{if(parameters.overlayBgOpacity !== undefined, parameters.overlayBgOpacity, 0.0)}}",
-        "bgPadding": "{{if(parameters.overlayBgPadding, parameters.overlayBgPadding, 8)}}",
-        "outline": "{{if(parameters.overlayOutline !== undefined, parameters.overlayOutline, 2)}}",
-        "bold": "{{if(parameters.overlayBold !== undefined, parameters.overlayBold, true)}}"
+        "mode": "{{if(get(parameters.subtitleSettings, 'mode'), get(parameters.subtitleSettings, 'mode'), 'word-highlight')}}",
+        "position": "{{if(get(parameters.subtitleSettings, 'position'), get(parameters.subtitleSettings, 'position'), 'bottom')}}",
+        "animation": "{{if(get(parameters.subtitleSettings, 'animation'), get(parameters.subtitleSettings, 'animation'), 'fade')}}",
+        "fontName": "{{if(get(parameters.subtitleSettings, 'fontName'), get(parameters.subtitleSettings, 'fontName'), 'Inter')}}",
+        "fontSize": "{{if(get(parameters.subtitleSettings, 'fontSize'), get(parameters.subtitleSettings, 'fontSize'), omit)}}",
+        "primaryColor": "{{ifempty(get(parameters.subtitleSettings, 'primaryColor'), '#FFFFFF')}}",
+        "outlineColor": "{{ifempty(get(parameters.subtitleSettings, 'outlineColor'), '#000000')}}",
+        "activeWordTextColor": "{{if(get(parameters.subtitleSettings, 'activeWordTextColor'), get(parameters.subtitleSettings, 'activeWordTextColor'), omit)}}",
+        "activeWordBackColor": "{{if(get(parameters.subtitleSettings, 'activeWordBackColor'), get(parameters.subtitleSettings, 'activeWordBackColor'), omit)}}",
+        "keywordColor": "{{ifempty(get(parameters.subtitleSettings, 'keywordColor'), '#FFD700')}}",
+        "bold": "{{if(get(parameters.subtitleSettings, 'bold') !== undefined, get(parameters.subtitleSettings, 'bold'), true)}}"
       }
     },
     "response": {
@@ -52,8 +45,6 @@
       }
     }
   },
-
-  // ===== ШАГ 2: Поллинг статуса до завершения =====
   {
     "url": "/status/{{temp.jobId}}",
     "method": "GET",
@@ -64,6 +55,7 @@
         "message": "[{{statusCode}}] {{body.error}}"
       },
       "temp": {
+        "jobId": "{{temp.jobId}}",
         "status": "{{body.status}}",
         "queuePosition": "{{body.queuePosition}}"
       }
@@ -71,11 +63,9 @@
     "repeat": {
       "condition": "{{temp.status !== 'done' && temp.status !== 'fail'}}",
       "delay": 10000,
-      "limit": 360
+      "limit": 720
     }
   },
-
-  // ===== ШАГ 3: Получение результата =====
   {
     "url": "/result/{{temp.jobId}}",
     "method": "GET",

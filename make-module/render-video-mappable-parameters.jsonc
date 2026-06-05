@@ -1,418 +1,548 @@
 [
-  // ─────────────────────────────────────────────
-  // МЕДИА
-  // ─────────────────────────────────────────────
   {
     "name": "images",
     "type": "array",
-    "label": "🖼️ Изображения",
+    "label": "Кадры",
     "required": true,
     "spec": {
       "type": "collection",
-      "label": "Изображение",
+      "label": "Кадр",
       "spec": [
         {
           "name": "url",
           "type": "url",
-          "label": "Ссылка на файл",
+          "label": "Файл кадра",
           "required": true,
-          "help": "Прямая ссылка на изображение (JPEG, PNG, WEBP) или видеоклип (MP4, MOV)"
+          "help": "Прямая ссылка на изображение или видео: JPG, PNG, WEBP, MP4, MOV."
+        },
+        {
+          "name": "durationSeconds",
+          "type": "number",
+          "label": "Длительность кадра",
+          "required": false,
+          "validate": { "min": 0.1, "max": 3600 },
+          "help": "Сколько секунд показывать этот кадр. Оставьте пустым — сервис распределит время автоматически по озвучке. Если сумма длительностей больше озвучки, видео станет длиннее голоса."
         },
         {
           "name": "overlayText",
           "type": "text",
-          "label": "Надпись поверх",
+          "label": "Надпись на кадре",
           "required": false,
-          "help": "Текст, который появится поверх этого кадра. Оставьте пустым, если надпись не нужна"
+          "help": "Текст, который появится поверх этого конкретного кадра. Можно оставить пустым."
+        },
+        {
+          "name": "overlaySettings",
+          "type": "collection",
+          "label": "Настройки надписи на кадре",
+          "required": false,
+          "spec": [
+            {
+              "name": "fontName",
+              "type": "select",
+              "label": "Шрифт",
+              "required": false,
+              "default": "Inter",
+              "options": [
+                { "label": "Inter", "value": "Inter" },
+                { "label": "Roboto", "value": "Roboto" },
+                { "label": "Montserrat", "value": "Montserrat" },
+                { "label": "Oswald", "value": "Oswald" },
+                { "label": "Raleway", "value": "Raleway" },
+                { "label": "Nunito", "value": "Nunito" },
+                { "label": "Bebas Neue", "value": "BebasNeue" },
+                { "label": "Ubuntu", "value": "Ubuntu" }
+              ],
+              "help": "Шрифт надписи на этом кадре. Все варианты встроены в сервер."
+            },
+            {
+              "name": "fontSize",
+              "type": "number",
+              "label": "Размер",
+              "required": false,
+              "validate": { "min": 12, "max": 300 },
+              "help": "Оставьте пустым для авторазмера. Укажите число, если нужен точный размер."
+            },
+            {
+              "name": "fontColor",
+              "type": "color",
+              "label": "Цвет текста",
+              "required": false,
+              "default": "#FFFFFF",
+              "help": "Цвет надписи на этом кадре."
+            },
+            {
+              "name": "position",
+              "type": "select",
+              "label": "Позиция",
+              "required": false,
+              "default": "top",
+              "options": [
+                { "label": "Сверху", "value": "top" },
+                { "label": "По центру", "value": "center" },
+                { "label": "Снизу", "value": "bottom" }
+              ],
+              "help": "Где на кадре появляется надпись."
+            },
+            {
+              "name": "bgColor",
+              "type": "color",
+              "label": "Цвет подложки",
+              "required": false,
+              "default": "#000000",
+              "help": "Цвет фона под надписью. Прозрачность задаётся отдельно."
+            },
+            {
+              "name": "bgOpacity",
+              "type": "number",
+              "label": "Прозрачность подложки",
+              "required": false,
+              "default": 0,
+              "validate": { "min": 0, "max": 1 },
+              "help": "0 — без подложки, 1 — непрозрачная. Например 0.6 — полупрозрачная."
+            },
+            {
+              "name": "bgPadding",
+              "type": "number",
+              "label": "Отступ подложки",
+              "required": false,
+              "default": 8,
+              "validate": { "min": 0, "max": 80 },
+              "help": "Отступ между текстом и краями подложки в пикселях."
+            },
+            {
+              "name": "outline",
+              "type": "number",
+              "label": "Толщина обводки",
+              "required": false,
+              "default": 2,
+              "validate": { "min": 0, "max": 20 },
+              "help": "Обводка помогает читать текст на светлом или пёстром фоне. 0 — без обводки."
+            },
+            {
+              "name": "bold",
+              "type": "boolean",
+              "label": "Жирный",
+              "required": false,
+              "default": true,
+              "help": "Жирное начертание надписи на этом кадре."
+            }
+          ],
+          "help": "Внешний вид надписи на этом кадре: шрифт, размер, цвет, позиция, подложка и обводка."
+        },
+        {
+          "name": "motionSettings",
+          "type": "collection",
+          "label": "Движение кадра",
+          "required": false,
+          "spec": [
+            {
+              "name": "type",
+              "type": "select",
+              "label": "Тип зума",
+              "required": false,
+              "default": "auto",
+              "options": [
+                { "label": "Авто", "value": "auto" },
+                { "label": "Выкл", "value": "none" },
+                { "label": "Плавный наезд", "value": "smooth-in" },
+                { "label": "Плавный отъезд", "value": "smooth-out" },
+                { "label": "Резкий зум", "value": "sharp" }
+              ],
+              "help": "Плавный — постепенный наезд. Резкий — мгновенный скачок масштаба для динамичного акцента."
+            },
+            {
+              "name": "zoomPercent",
+              "type": "number",
+              "label": "Сила зума",
+              "required": false,
+              "default": 20,
+              "validate": { "min": 0, "max": 300 },
+              "help": "На сколько увеличить кадр. 20 — лёгкий наезд, 50 — заметный акцент, 100+ — сильное приближение."
+            },
+            {
+              "name": "zoomAt",
+              "type": "number",
+              "label": "Момент зума",
+              "required": false,
+              "validate": { "min": 0 },
+              "help": "Для резкого зума: на какой секунде кадра сделать скачок масштаба. Пусто — примерно в середине кадра."
+            },
+            {
+              "name": "direction",
+              "type": "select",
+              "label": "Направление",
+              "required": false,
+              "default": "center",
+              "options": [
+                { "label": "Центр", "value": "center" },
+                { "label": "Верхний левый угол", "value": "top-left" },
+                { "label": "Верхний правый угол", "value": "top-right" },
+                { "label": "Нижний левый угол", "value": "bottom-left" },
+                { "label": "Нижний правый угол", "value": "bottom-right" },
+                { "label": "Влево", "value": "left" },
+                { "label": "Вправо", "value": "right" }
+              ],
+              "help": "Куда смещается камера при зуме."
+            }
+          ],
+          "help": "Движение внутри кадра: тип зума, сила, момент резкого зума и направление."
+        },
+        {
+          "name": "videoBehavior",
+          "type": "select",
+          "label": "Поведение видео",
+          "required": false,
+          "default": "clip",
+          "options": [
+            { "label": "Обрезать по клипу", "value": "clip" },
+            { "label": "Зациклить до длительности кадра", "value": "loop" },
+            { "label": "Заморозить последний кадр", "value": "freeze" }
+          ],
+          "help": "Для видео-кадров. Обрезать по клипу — переход начнётся, когда b-roll закончится."
         }
       ]
     },
-    "validate": { "minItems": 1, "maxItems": 15 },
-    "help": "Кадры видео: изображения или короткие видеоклипы. Минимум 1, максимум 15"
+    "validate": { "minItems": 1, "maxItems": 30 },
+    "help": "Кадры ролика: изображения или короткие видео. Порядок кадров = порядок в ролике."
   },
   {
     "name": "voiceMp3",
     "type": "url",
-    "label": "🎙️ Озвучка (MP3)",
+    "label": "Озвучка (MP3)",
     "required": true,
-    "help": "Ссылка на MP3 с голосом. Длина озвучки определяет длину итогового видео"
+    "help": "MP3 с голосом. Длина озвучки определяет базовую длину ролика."
   },
   {
     "name": "musicMp3",
     "type": "url",
-    "label": "🎵 Фоновая музыка (MP3)",
+    "label": "Фоновая музыка (MP3)",
     "required": false,
-    "help": "Ссылка на MP3 с фоновой музыкой. Зациклится автоматически"
+    "help": "MP3 с музыкой. Если музыка короче ролика, сервис зациклит её."
   },
   {
     "name": "musicVolume",
     "type": "number",
-    "label": "🔊 Громкость музыки",
+    "label": "Громкость музыки",
     "required": false,
     "default": 0.15,
     "validate": { "min": 0, "max": 1 },
-    "help": "0 — тишина, 1 — полная громкость. По умолчанию 0.15 (тихий фон)"
+    "help": "0 — без музыки, 0.1–0.2 — тихий фон, 1 — полная громкость."
   },
-
-  // ─────────────────────────────────────────────
-  // СУБТИТРЫ
-  // ─────────────────────────────────────────────
   {
     "name": "subtitlesText",
     "type": "text",
-    "label": "📝 Текст субтитров",
+    "label": "Текст субтитров",
     "required": false,
-    "help": "Полный текст для субтитров. Слова в *звёздочках* будут выделены цветом. Если передать таймкоды слов (ElevenLabs), текст берётся из них"
+    "help": "Полный текст субтитров. Слова в *звёздочках* можно выделить цветом."
   },
   {
     "name": "wordTimings",
     "type": "array",
-    "label": "⏱️ Таймкоды слов (ElevenLabs)",
+    "label": "Таймкоды слов",
     "required": false,
     "spec": {
       "type": "collection",
       "label": "Слово",
       "spec": [
-        { "name": "text",  "type": "text",   "label": "Слово",        "required": true },
+        { "name": "text", "type": "text", "label": "Слово", "required": true },
         { "name": "start", "type": "number", "label": "Начало (сек)", "required": true },
-        { "name": "end",   "type": "number", "label": "Конец (сек)",  "required": true }
+        { "name": "end", "type": "number", "label": "Конец (сек)", "required": true }
       ]
     },
-    "help": "Массив таймкодов из ElevenLabs для точной синхронизации подсветки слов"
+    "help": "Массив слов с временем начала и конца. Используется для точной подсветки слов."
   },
-
-  // ─────────────────────────────────────────────
-  // РЕЖИМ СУБТИТРОВ (с вложенными настройками)
-  // ─────────────────────────────────────────────
   {
-    "name": "subtitleMode",
-    "type": "select",
-    "label": "💬 Режим субтитров",
+    "name": "subtitleSettings",
+    "type": "collection",
+    "label": "Настройки субтитров",
     "required": false,
-    "default": "word-highlight",
-    "options": [
+    "spec": [
       {
-        "label": "Подсветка слов — активное слово выделяется блоком",
-        "value": "word-highlight",
-        "nested": [
-          {
-            "name": "activeWordTextColor",
-            "type": "color",
-            "label": "💬 Активное слово — цвет текста",
-            "required": false,
-            "default": "#FFFFFF",
-            "help": "Цвет текста выделенного (произносимого) слова"
-          },
-          {
-            "name": "activeWordBackColor",
-            "type": "color",
-            "label": "🟪 Активное слово — цвет блока",
-            "required": false,
-            "default": "#8B5CF6",
-            "help": "Цвет фонового прямоугольника под активным словом"
-          }
-        ]
+        "name": "mode",
+        "type": "select",
+        "label": "Режим",
+        "required": false,
+        "default": "word-highlight",
+        "options": [
+          { "label": "Подсветка слов", "value": "word-highlight" },
+          { "label": "Одно крупное слово", "value": "single-word" },
+          { "label": "Фразы", "value": "phrase" }
+        ],
+        "help": "Выбери стиль: подсветка слов, одно крупное слово или фразы."
       },
       {
-        "label": "Одно слово — крупный шрифт, стиль Shorts / MrBeast",
-        "value": "single-word",
-        "nested": []
+        "name": "position",
+        "type": "select",
+        "label": "Позиция",
+        "required": false,
+        "default": "bottom",
+        "options": [
+          { "label": "Снизу", "value": "bottom" },
+          { "label": "По центру", "value": "center" },
+          { "label": "Сверху", "value": "top" }
+        ],
+        "help": "Где показывать субтитры. Для Reels/Shorts лучше не ставить слишком низко."
       },
       {
-        "label": "Фразы — показывает целые предложения",
-        "value": "phrase",
-        "nested": []
+        "name": "animation",
+        "type": "select",
+        "label": "Анимация",
+        "required": false,
+        "default": "fade",
+        "options": [
+          { "label": "Без анимации", "value": "none" },
+          { "label": "Плавное появление", "value": "fade" },
+          { "label": "Pop", "value": "pop" },
+          { "label": "Slide Up", "value": "slide-up" },
+          { "label": "Bounce", "value": "bounce" }
+        ],
+        "help": "Как появляется новый текст."
+      },
+      {
+        "name": "fontName",
+        "type": "select",
+        "label": "Шрифт",
+        "required": false,
+        "default": "Inter",
+        "options": [
+          { "label": "Inter", "value": "Inter" },
+          { "label": "Roboto", "value": "Roboto" },
+          { "label": "Montserrat", "value": "Montserrat" },
+          { "label": "Oswald", "value": "Oswald" },
+          { "label": "Raleway", "value": "Raleway" },
+          { "label": "Nunito", "value": "Nunito" },
+          { "label": "Bebas Neue", "value": "BebasNeue" },
+          { "label": "Ubuntu", "value": "Ubuntu" }
+        ],
+        "help": "Шрифт субтитров. Все варианты встроены в сервер."
+      },
+      {
+        "name": "fontSize",
+        "type": "number",
+        "label": "Размер",
+        "required": false,
+        "validate": { "min": 12, "max": 200 },
+        "help": "Оставьте пустым для авторазмера. Укажите число, если нужен точный размер."
+      },
+      {
+        "name": "bold",
+        "type": "boolean",
+        "label": "Жирный",
+        "required": false,
+        "default": true,
+        "help": "Жирное начертание субтитров."
+      },
+      {
+        "name": "primaryColor",
+        "type": "color",
+        "label": "Цвет текста",
+        "required": false,
+        "default": "#FFFFFF",
+        "help": "Основной цвет субтитров."
+      },
+      {
+        "name": "outlineColor",
+        "type": "color",
+        "label": "Цвет обводки",
+        "required": false,
+        "default": "#000000",
+        "help": "Обводка помогает читать текст на светлом или пёстром фоне."
+      },
+      {
+        "name": "activeWordTextColor",
+        "type": "color",
+        "label": "Активное слово — текст",
+        "required": false,
+        "default": "#FFFFFF",
+        "help": "Цвет текста слова, которое произносится сейчас."
+      },
+      {
+        "name": "activeWordBackColor",
+        "type": "color",
+        "label": "Активное слово — фон",
+        "required": false,
+        "default": "#8B5CF6",
+        "help": "Цвет блока под активным словом."
+      },
+      {
+        "name": "keywordColor",
+        "type": "color",
+        "label": "Цвет ключевых слов",
+        "required": false,
+        "default": "#FFD700",
+        "help": "Цвет слов, обёрнутых в *звёздочки*."
       }
     ],
-    "help": "Выбор стиля отображения субтитров. Настройки активного слова появляются только для режима «Подсветка слов»"
+    "help": "Внешний вид субтитров: режим, позиция, шрифт, размер, цвета и анимация."
   },
-
-  // ─────────────────────────────────────────────
-  // ОБЩИЕ НАСТРОЙКИ СУБТИТРОВ (для всех режимов)
-  // ─────────────────────────────────────────────
   {
-    "name": "subtitlePosition",
-    "type": "select",
-    "label": "📍 Позиция субтитров",
+    "name": "videoSettings",
+    "type": "collection",
+    "label": "Видео",
     "required": false,
-    "default": "bottom",
-    "options": [
-      { "label": "Снизу (стандартно)", "value": "bottom" },
-      { "label": "По центру", "value": "center" },
-      { "label": "Сверху", "value": "top" }
+    "spec": [
+      {
+        "name": "videoPreset",
+        "type": "select",
+        "label": "Пресет",
+        "required": false,
+        "default": "reels_1080_30",
+        "options": [
+          { "label": "Reels / Shorts — 9:16 Full HD 30 FPS", "value": "reels_1080_30" },
+          { "label": "Reels / Shorts — 9:16 Full HD 60 FPS", "value": "reels_1080_60" },
+          { "label": "Reels / Shorts — 9:16 2K 30 FPS", "value": "reels_2k_30" },
+          { "label": "YouTube — 16:9 2K 30 FPS", "value": "youtube_2k_30" },
+          { "label": "Квадрат — 1:1 Full HD 30 FPS", "value": "square_1080_30" },
+          { "label": "Свои настройки ниже", "value": "custom" }
+        ],
+        "help": "Быстрый выбор настроек под Shorts, Reels, YouTube или квадратный формат."
+      },
+      {
+        "name": "orientation",
+        "type": "select",
+        "label": "Ориентация",
+        "required": false,
+        "default": "9:16",
+        "options": [
+          { "label": "9:16 — Shorts/Reels", "value": "9:16" },
+          { "label": "16:9 — YouTube", "value": "16:9" },
+          { "label": "1:1 — квадрат", "value": "1:1" }
+        ],
+        "help": "9:16 — Shorts/Reels, 16:9 — YouTube, 1:1 — квадратный формат."
+      },
+      {
+        "name": "quality",
+        "type": "select",
+        "label": "Качество",
+        "required": false,
+        "default": "full-hd",
+        "options": [
+          { "label": "Full HD", "value": "full-hd" },
+          { "label": "2K", "value": "2k" }
+        ],
+        "help": "Full HD — быстрее и легче. 2K — выше качество, но дольше рендер."
+      },
+      {
+        "name": "fps",
+        "type": "select",
+        "label": "FPS",
+        "required": false,
+        "default": "30",
+        "options": [
+          { "label": "24", "value": "24" },
+          { "label": "25", "value": "25" },
+          { "label": "30", "value": "30" },
+          { "label": "50", "value": "50" },
+          { "label": "60", "value": "60" }
+        ],
+        "help": "30 — основной вариант для Reels/Shorts. 60 — плавнее, но рендер дольше."
+      },
+      {
+        "name": "transitionType",
+        "type": "select",
+        "label": "Переход",
+        "required": false,
+        "default": "fade",
+        "options": [
+          { "label": "Случайный", "value": "random" },
+          { "label": "Fade", "value": "fade" },
+          { "label": "Fade to Black", "value": "fadeblack" },
+          { "label": "Fade to White", "value": "fadewhite" },
+          { "label": "Dissolve", "value": "dissolve" },
+          { "label": "Smooth Left", "value": "smoothleft" },
+          { "label": "Smooth Right", "value": "smoothright" },
+          { "label": "Slide Left", "value": "slideleft" },
+          { "label": "Slide Right", "value": "slideright" },
+          { "label": "Zoom In", "value": "zoomin" },
+          { "label": "Pixelize", "value": "pixelize" },
+          { "label": "Circle Open", "value": "circleopen" },
+          { "label": "Circle Close", "value": "circleclose" },
+          { "label": "Radial", "value": "radial" },
+          { "label": "Wipe Left", "value": "wipeleft" },
+          { "label": "Wipe Right", "value": "wiperight" },
+          { "label": "Wipe Up", "value": "wipeup" },
+          { "label": "Wipe Down", "value": "wipedown" }
+        ],
+        "help": "Тип перехода между кадрами."
+      },
+      {
+        "name": "bitratePreset",
+        "type": "select",
+        "label": "Качество экспорта",
+        "required": false,
+        "default": "standard",
+        "options": [
+          { "label": "Быстро", "value": "fast" },
+          { "label": "Стандарт", "value": "standard" },
+          { "label": "Высокое", "value": "high" },
+          { "label": "Максимальное", "value": "ultra" }
+        ],
+        "help": "Выше качество — больше файл и дольше рендер."
+      }
     ],
-    "help": "Где на экране располагаются субтитры"
+    "help": "Формат итогового ролика: пресет, ориентация, качество, FPS и переходы."
   },
   {
-    "name": "subtitleAnimation",
-    "type": "select",
-    "label": "✨ Анимация субтитров",
+    "name": "brandSettings",
+    "type": "collection",
+    "label": "Брендинг",
     "required": false,
-    "default": "fade",
-    "options": [
-      { "label": "Без анимации", "value": "none" },
-      { "label": "Плавное появление (Fade)", "value": "fade" },
-      { "label": "Всплытие (Pop)", "value": "pop" },
-      { "label": "Выезд снизу (Slide Up)", "value": "slide-up" },
-      { "label": "Отскок (Bounce)", "value": "bounce" }
+    "spec": [
+      {
+        "name": "logoUrl",
+        "type": "url",
+        "label": "Логотип",
+        "required": false,
+        "help": "PNG-логотип. Лучше использовать файл с прозрачным фоном."
+      },
+      {
+        "name": "logoPosition",
+        "type": "select",
+        "label": "Позиция логотипа",
+        "required": false,
+        "default": "top-right",
+        "options": [
+          { "label": "Верхний левый угол", "value": "top-left" },
+          { "label": "Верхний центр", "value": "top-center" },
+          { "label": "Верхний правый угол", "value": "top-right" },
+          { "label": "Нижний левый угол", "value": "bottom-left" },
+          { "label": "Нижний центр", "value": "bottom-center" },
+          { "label": "Нижний правый угол", "value": "bottom-right" }
+        ],
+        "help": "Где разместить логотип на видео."
+      }
     ],
-    "help": "Анимация при появлении каждой новой фразы или слова"
+    "help": "Логотип и его расположение поверх видео."
   },
   {
-    "name": "fontName",
-    "type": "select",
-    "label": "🔤 Шрифт субтитров",
+    "name": "advancedSettings",
+    "type": "collection",
+    "label": "Дополнительно",
     "required": false,
-    "default": "Inter",
-    "options": [
-      { "label": "Inter — современный, по умолчанию", "value": "Inter" },
-      { "label": "Roboto — нейтральный Google-шрифт", "value": "Roboto" },
-      { "label": "Montserrat — геометрический, жирный", "value": "Montserrat" },
-      { "label": "Oswald — узкий, заголовочный", "value": "Oswald" },
-      { "label": "Raleway — элегантный", "value": "Raleway" },
-      { "label": "Nunito — мягкий, со скруглёнными буквами", "value": "Nunito" },
-      { "label": "Bebas Neue — все капсом, броский", "value": "BebasNeue" },
-      { "label": "Ubuntu — технологичный", "value": "Ubuntu" }
+    "spec": [
+      {
+        "name": "webhookUrl",
+        "type": "url",
+        "label": "Webhook URL",
+        "required": false,
+        "help": "Сервис отправит результат на этот URL после завершения рендера."
+      },
+      {
+        "name": "cleanMetadata",
+        "type": "boolean",
+        "label": "Очистить метаданные",
+        "required": false,
+        "default": true,
+        "help": "Удаляет служебные метаданные входных файлов и часть encoder-информации. Включено по умолчанию."
+      },
+      {
+        "name": "resolution",
+        "type": "text",
+        "label": "Resolution fallback",
+        "required": false,
+        "help": "Техническое поле для старых сценариев: например 1080x1920. Используется только если не выбраны новые настройки видео."
+      }
     ],
-    "help": "Шрифт субтитров. Все шрифты встроены в сервер"
-  },
-  {
-    "name": "fontSize",
-    "type": "number",
-    "label": "🔠 Размер шрифта",
-    "required": false,
-    "validate": { "min": 12, "max": 200 },
-    "help": "Размер шрифта в пунктах. Оставьте пустым — подберётся автоматически"
-  },
-  {
-    "name": "bold",
-    "type": "boolean",
-    "label": "𝐁 Жирный шрифт",
-    "required": false,
-    "default": true,
-    "help": "Жирное начертание субтитров"
-  },
-  {
-    "name": "primaryColor",
-    "type": "color",
-    "label": "🎨 Цвет текста",
-    "required": false,
-    "default": "#FFFFFF",
-    "help": "Основной цвет субтитров"
-  },
-  {
-    "name": "outlineColor",
-    "type": "color",
-    "label": "🖊️ Цвет обводки текста",
-    "required": false,
-    "default": "#000000",
-    "help": "Цвет тонкой обводки вокруг букв для читаемости"
-  },
-  {
-    "name": "keywordColor",
-    "type": "color",
-    "label": "⭐ Цвет ключевых слов",
-    "required": false,
-    "default": "#FFD700",
-    "help": "Цвет слов, обёрнутых в *звёздочки* в тексте субтитров. По умолчанию золотой"
-  },
-
-  // ─────────────────────────────────────────────
-  // ДВИЖЕНИЕ И ПЕРЕХОДЫ
-  // ─────────────────────────────────────────────
-  {
-    "name": "motionPreset",
-    "type": "select",
-    "label": "🎥 Эффект движения (Ken Burns)",
-    "required": false,
-    "default": "auto",
-    "options": [
-      { "label": "❌ Отключён — статичные кадры", "value": "none" },
-      { "label": "Авто — разные направления чередуются", "value": "auto" },
-      { "label": "Zoom In — центр", "value": "zoom-in-center" },
-      { "label": "Zoom Out — центр", "value": "zoom-out-center" },
-      { "label": "Zoom In — верхний левый угол", "value": "zoom-in-topleft" },
-      { "label": "Zoom In — верхний правый угол", "value": "zoom-in-topright" },
-      { "label": "Zoom In — нижний левый угол", "value": "zoom-in-bottomleft" },
-      { "label": "Zoom In — нижний правый угол", "value": "zoom-in-bottomright" },
-      { "label": "Zoom Out — влево", "value": "zoom-out-left" },
-      { "label": "Zoom Out — вправо", "value": "zoom-out-right" }
-    ],
-    "help": "Плавное движение камеры по изображению. Авто — каждый кадр со своим направлением"
-  },
-  {
-    "name": "transitionType",
-    "type": "select",
-    "label": "🎞️ Переход между кадрами",
-    "required": false,
-    "default": "fade",
-    "options": [
-      { "label": "🎲 Случайный — разный для каждого кадра", "value": "random" },
-      { "label": "Fade — плавное затухание", "value": "fade" },
-      { "label": "Fade to Black — через чёрный", "value": "fadeblack" },
-      { "label": "Fade to White — через белый", "value": "fadewhite" },
-      { "label": "Dissolve — растворение", "value": "dissolve" },
-      { "label": "Smooth Left", "value": "smoothleft" },
-      { "label": "Smooth Right", "value": "smoothright" },
-      { "label": "Slide Left", "value": "slideleft" },
-      { "label": "Slide Right", "value": "slideright" },
-      { "label": "Zoom In", "value": "zoomin" },
-      { "label": "Pixelize — пикселизация", "value": "pixelize" },
-      { "label": "Circle Open — круговое раскрытие", "value": "circleopen" },
-      { "label": "Circle Close — круговое закрытие", "value": "circleclose" },
-      { "label": "Radial — радиальный", "value": "radial" },
-      { "label": "Wipe Left", "value": "wipeleft" },
-      { "label": "Wipe Right", "value": "wiperight" },
-      { "label": "Wipe Up", "value": "wipeup" },
-      { "label": "Wipe Down", "value": "wipedown" }
-    ],
-    "help": "Тип перехода между изображениями"
-  },
-
-  // ─────────────────────────────────────────────
-  // НАДПИСИ НА КАДРАХ
-  // ─────────────────────────────────────────────
-  {
-    "name": "overlayFontName",
-    "type": "select",
-    "label": "✏️ Надпись — шрифт",
-    "required": false,
-    "default": "Inter",
-    "options": [
-      { "label": "Inter — современный, по умолчанию", "value": "Inter" },
-      { "label": "Roboto — нейтральный Google-шрифт", "value": "Roboto" },
-      { "label": "Montserrat — геометрический, жирный", "value": "Montserrat" },
-      { "label": "Oswald — узкий, заголовочный", "value": "Oswald" },
-      { "label": "Raleway — элегантный", "value": "Raleway" },
-      { "label": "Nunito — мягкий, со скруглёнными буквами", "value": "Nunito" },
-      { "label": "Bebas Neue — все капсом, броский", "value": "BebasNeue" },
-      { "label": "Ubuntu — технологичный", "value": "Ubuntu" }
-    ],
-    "help": "Шрифт для надписей поверх изображений (overlayText)"
-  },
-  {
-    "name": "overlayFontSize",
-    "type": "number",
-    "label": "🔡 Надпись — размер шрифта",
-    "required": false,
-    "validate": { "min": 12, "max": 300 },
-    "help": "Размер шрифта надписи. Оставьте пустым — подберётся автоматически (~4.5% высоты)"
-  },
-  {
-    "name": "overlayFontColor",
-    "type": "color",
-    "label": "🎨 Надпись — цвет текста",
-    "required": false,
-    "default": "#FFFFFF",
-    "help": "Цвет текста надписи"
-  },
-  {
-    "name": "overlayPosition",
-    "type": "select",
-    "label": "📍 Надпись — расположение",
-    "required": false,
-    "default": "top",
-    "options": [
-      { "label": "Сверху", "value": "top" },
-      { "label": "По центру", "value": "center" },
-      { "label": "Снизу", "value": "bottom" }
-    ],
-    "help": "Где на кадре появляется надпись"
-  },
-  {
-    "name": "overlayBgColor",
-    "type": "color",
-    "label": "🟫 Надпись — цвет подложки",
-    "required": false,
-    "default": "#000000",
-    "help": "Цвет фоновой подложки под надписью. Прозрачность задаётся отдельно"
-  },
-  {
-    "name": "overlayBgOpacity",
-    "type": "number",
-    "label": "🔲 Надпись — прозрачность подложки",
-    "required": false,
-    "default": 0,
-    "validate": { "min": 0, "max": 1 },
-    "help": "0 — без фона, 1 — непрозрачный. Например 0.6 — полупрозрачная подложка"
-  },
-  {
-    "name": "overlayBgPadding",
-    "type": "number",
-    "label": "📐 Надпись — отступ подложки (px)",
-    "required": false,
-    "default": 8,
-    "validate": { "min": 0, "max": 60 },
-    "help": "Отступ между текстом и краями подложки в пикселях"
-  },
-  {
-    "name": "overlayOutline",
-    "type": "number",
-    "label": "🖊️ Надпись — толщина обводки",
-    "required": false,
-    "default": 2,
-    "validate": { "min": 0, "max": 10 },
-    "help": "Толщина обводки вокруг букв надписи. 0 — без обводки"
-  },
-  {
-    "name": "overlayBold",
-    "type": "boolean",
-    "label": "𝐁 Надпись — жирный",
-    "required": false,
-    "default": true,
-    "help": "Жирное начертание для надписей"
-  },
-
-  // ─────────────────────────────────────────────
-  // ЛОГОТИП
-  // ─────────────────────────────────────────────
-  {
-    "name": "logoUrl",
-    "type": "url",
-    "label": "🏷️ Логотип (ссылка на PNG)",
-    "required": false,
-    "help": "Логотип будет наложен поверх видео. Рекомендуется PNG с прозрачным фоном"
-  },
-  {
-    "name": "logoPosition",
-    "type": "select",
-    "label": "📌 Логотип — позиция",
-    "required": false,
-    "default": "top-right",
-    "options": [
-      { "label": "↖️ Верхний левый угол", "value": "top-left" },
-      { "label": "⬆️ Верхний центр", "value": "top-center" },
-      { "label": "↗️ Верхний правый угол (по умолчанию)", "value": "top-right" },
-      { "label": "↙️ Нижний левый угол", "value": "bottom-left" },
-      { "label": "⬇️ Нижний центр", "value": "bottom-center" },
-      { "label": "↘️ Нижний правый угол", "value": "bottom-right" }
-    ],
-    "help": "Где на видео расположить логотип"
-  },
-
-  // ─────────────────────────────────────────────
-  // ТЕХНИЧЕСКИЕ НАСТРОЙКИ
-  // ─────────────────────────────────────────────
-  {
-    "name": "resolution",
-    "type": "select",
-    "label": "📺 Разрешение видео",
-    "required": false,
-    "default": "1080x1920",
-    "options": [
-      { "label": "1080×1920 — вертикальное Full HD (Reels, Shorts, TikTok)", "value": "1080x1920" },
-      { "label": "720×1280 — вертикальное HD", "value": "720x1280" },
-      { "label": "1920×1080 — горизонтальное Full HD (YouTube)", "value": "1920x1080" },
-      { "label": "1280×720 — горизонтальное HD", "value": "1280x720" },
-      { "label": "1080×1080 — квадрат (Instagram)", "value": "1080x1080" }
-    ],
-    "help": "Разрешение итогового видео"
-  },
-  {
-    "name": "webhookUrl",
-    "type": "url",
-    "label": "🔔 Webhook URL",
-    "required": false,
-    "help": "Сервис отправит POST на этот адрес после завершения рендера с полями: jobId, status, videoUrl, thumbnailUrl, error"
+    "help": "Webhook и технические параметры для нестандартных сценариев."
   }
 ]
