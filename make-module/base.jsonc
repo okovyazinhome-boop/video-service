@@ -1,5 +1,6 @@
 {
   "baseUrl": "{{connection.serviceUrl}}",
+  "timeout": "{{common.timeout}}",
   "headers": {
     "Authorization": "{{if(connection.apiKey, 'Bearer ' + connection.apiKey, omit)}}",
     "Content-Type": "application/json"
