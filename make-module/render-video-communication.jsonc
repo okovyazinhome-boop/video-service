@@ -15,11 +15,11 @@
       "fps": "{{if(get(parameters.videoSettings, 'fps'), get(parameters.videoSettings, 'fps'), '30')}}",
       "transitionType": "{{if(get(parameters.videoSettings, 'transitionType'), get(parameters.videoSettings, 'transitionType'), 'fade')}}",
       "bitratePreset": "{{if(get(parameters.videoSettings, 'bitratePreset'), get(parameters.videoSettings, 'bitratePreset'), 'standard')}}",
-      "resolution": "{{if(get(parameters.advancedSettings, 'resolution'), get(parameters.advancedSettings, 'resolution'), omit)}}",
-      "logoUrl": "{{if(get(parameters.brandSettings, 'logoUrl'), get(parameters.brandSettings, 'logoUrl'), omit)}}",
-      "logoPosition": "{{if(get(parameters.brandSettings, 'logoPosition'), get(parameters.brandSettings, 'logoPosition'), 'top-right')}}",
-      "webhookUrl": "{{if(get(parameters.advancedSettings, 'webhookUrl'), get(parameters.advancedSettings, 'webhookUrl'), omit)}}",
-      "cleanMetadata": "{{if(get(parameters.advancedSettings, 'cleanMetadata') !== undefined, get(parameters.advancedSettings, 'cleanMetadata'), true)}}",
+      "resolution": "{{if(get(parameters.advancedMode, 'resolution'), get(parameters.advancedMode, 'resolution'), omit)}}",
+      "logoUrl": "{{if(get(parameters.brandMode, 'logoUrl'), get(parameters.brandMode, 'logoUrl'), omit)}}",
+      "logoPosition": "{{if(get(parameters.brandMode, 'logoPosition'), get(parameters.brandMode, 'logoPosition'), 'top-right')}}",
+      "webhookUrl": "{{if(get(parameters.advancedMode, 'webhookUrl'), get(parameters.advancedMode, 'webhookUrl'), omit)}}",
+      "cleanMetadata": "{{if(get(parameters.advancedMode, 'cleanMetadata') !== undefined, get(parameters.advancedMode, 'cleanMetadata'), true)}}",
       "subtitleStyle": {
         "mode": "{{if(get(parameters.subtitleSettings, 'mode'), get(parameters.subtitleSettings, 'mode'), 'word-highlight')}}",
         "position": "{{if(get(parameters.subtitleSettings, 'position'), get(parameters.subtitleSettings, 'position'), 'bottom')}}",
@@ -29,9 +29,9 @@
         "primaryColor": "{{ifempty(get(parameters.subtitleSettings, 'primaryColor'), '#FFFFFF')}}",
         "outlineColor": "{{ifempty(get(parameters.subtitleSettings, 'outlineColor'), '#000000')}}",
         "outline": "{{if(get(parameters.subtitleSettings, 'outline') !== undefined, get(parameters.subtitleSettings, 'outline'), 2)}}",
-        "activeWordTextColor": "{{if(get(get(parameters.subtitleSettings, 'advanced'), 'activeWordTextColor'), get(get(parameters.subtitleSettings, 'advanced'), 'activeWordTextColor'), omit)}}",
-        "activeWordBackColor": "{{if(get(get(parameters.subtitleSettings, 'advanced'), 'activeWordBackColor'), get(get(parameters.subtitleSettings, 'advanced'), 'activeWordBackColor'), omit)}}",
-        "keywordColor": "{{ifempty(get(get(parameters.subtitleSettings, 'advanced'), 'keywordColor'), '#FFD700')}}"
+        "activeWordTextColor": "{{if(get(parameters.subtitleSettings, 'activeWordTextColor'), get(parameters.subtitleSettings, 'activeWordTextColor'), omit)}}",
+        "activeWordBackColor": "{{if(get(parameters.subtitleSettings, 'activeWordBackColor'), get(parameters.subtitleSettings, 'activeWordBackColor'), omit)}}",
+        "keywordColor": "{{ifempty(get(parameters.subtitleSettings, 'keywordColor'), '#FFD700')}}"
       }
     },
     "response": {

@@ -23,162 +23,249 @@
           "help": "Сколько секунд показывать этот кадр. Оставьте пустым — сервис распределит время автоматически."
         },
         {
-          "name": "overlayCaption",
-          "type": "collection",
+          "name": "captionMode",
+          "type": "select",
           "label": "Надпись на кадре",
           "required": false,
-          "spec": [
+          "default": "off",
+          "options": [
             {
-              "name": "text",
-              "type": "text",
-              "label": "Текст",
-              "required": false,
-              "help": "Текст, который появится поверх этого конкретного кадра. Можно оставить пустым."
+              "label": "Нет",
+              "value": "off"
             },
             {
-              "name": "fontName",
-              "type": "select",
-              "label": "Шрифт",
-              "required": false,
-              "default": "Inter",
-              "options": [
-                { "label": "Inter", "value": "Inter" },
-                { "label": "Roboto", "value": "Roboto" },
-                { "label": "Montserrat", "value": "Montserrat" },
-                { "label": "Oswald", "value": "Oswald" },
-                { "label": "Raleway", "value": "Raleway" },
-                { "label": "Nunito", "value": "Nunito" },
-                { "label": "Bebas Neue", "value": "BebasNeue" },
-                { "label": "Ubuntu", "value": "Ubuntu" }
-              ],
-              "help": "Шрифт надписи на этом кадре."
-            },
-            {
-              "name": "fontSize",
-              "type": "number",
-              "label": "Размер",
-              "required": false,
-              "help": "Размер шрифта. Оставьте пустым для авторазмера."
-            },
-            {
-              "name": "fontColor",
-              "type": "color",
-              "label": "Цвет текста",
-              "required": false,
-              "default": "#FFFFFF",
-              "help": "Цвет надписи на этом кадре."
-            },
-            {
-              "name": "position",
-              "type": "select",
-              "label": "Позиция",
-              "required": false,
-              "default": "top",
-              "options": [
-                { "label": "Сверху", "value": "top" },
-                { "label": "По центру", "value": "center" },
-                { "label": "Снизу", "value": "bottom" }
-              ],
-              "help": "Где на кадре появляется надпись."
-            },
-            {
-              "name": "bgColor",
-              "type": "color",
-              "label": "Цвет подложки",
-              "required": false,
-              "default": "#000000",
-              "help": "Цвет фона под надписью."
-            },
-            {
-              "name": "bgOpacity",
-              "type": "number",
-              "label": "Прозрачность подложки",
-              "required": false,
-              "default": 0,
-              "help": "0 — без подложки, 1 — непрозрачная."
-            },
-            {
-              "name": "bgPadding",
-              "type": "number",
-              "label": "Отступ подложки, px",
-              "required": false,
-              "default": 8,
-              "help": "Отступ между текстом и краями подложки в пикселях."
-            },
-            {
-              "name": "outline",
-              "type": "number",
-              "label": "Толщина обводки",
-              "required": false,
-              "default": 2,
-              "help": "Обводка помогает читать текст. 0 — без обводки."
-            },
-            {
-              "name": "bold",
-              "type": "boolean",
-              "label": "Жирный",
-              "required": false,
-              "default": true,
-              "help": "Жирное начертание надписи на этом кадре."
+              "label": "Да",
+              "value": "on",
+              "nested": [
+                {
+                  "name": "captionText",
+                  "type": "text",
+                  "label": "Текст",
+                  "required": false,
+                  "help": "Текст поверх этого кадра."
+                },
+                {
+                  "name": "captionFontName",
+                  "type": "select",
+                  "label": "Шрифт",
+                  "required": false,
+                  "default": "Inter",
+                  "options": [
+                    {
+                      "label": "Inter",
+                      "value": "Inter"
+                    },
+                    {
+                      "label": "Roboto",
+                      "value": "Roboto"
+                    },
+                    {
+                      "label": "Montserrat",
+                      "value": "Montserrat"
+                    },
+                    {
+                      "label": "Oswald",
+                      "value": "Oswald"
+                    },
+                    {
+                      "label": "Raleway",
+                      "value": "Raleway"
+                    },
+                    {
+                      "label": "Nunito",
+                      "value": "Nunito"
+                    },
+                    {
+                      "label": "Bebas Neue",
+                      "value": "BebasNeue"
+                    },
+                    {
+                      "label": "Ubuntu",
+                      "value": "Ubuntu"
+                    }
+                  ],
+                  "help": "Шрифт надписи."
+                },
+                {
+                  "name": "captionFontSize",
+                  "type": "number",
+                  "label": "Размер",
+                  "required": false,
+                  "help": "Оставьте пустым для авторазмера."
+                },
+                {
+                  "name": "captionFontColor",
+                  "type": "color",
+                  "label": "Цвет текста",
+                  "required": false,
+                  "default": "#FFFFFF",
+                  "help": "Цвет надписи."
+                },
+                {
+                  "name": "captionPosition",
+                  "type": "select",
+                  "label": "Позиция",
+                  "required": false,
+                  "default": "top",
+                  "options": [
+                    {
+                      "label": "Сверху",
+                      "value": "top"
+                    },
+                    {
+                      "label": "По центру",
+                      "value": "center"
+                    },
+                    {
+                      "label": "Снизу",
+                      "value": "bottom"
+                    }
+                  ],
+                  "help": "Где на кадре появляется надпись."
+                },
+                {
+                  "name": "captionBgColor",
+                  "type": "color",
+                  "label": "Цвет подложки",
+                  "required": false,
+                  "default": "#000000",
+                  "help": "Цвет фона под надписью."
+                },
+                {
+                  "name": "captionBgOpacity",
+                  "type": "number",
+                  "label": "Прозрачность подложки",
+                  "required": false,
+                  "default": 0,
+                  "help": "0 — без подложки, 1 — непрозрачная."
+                },
+                {
+                  "name": "captionBgPadding",
+                  "type": "number",
+                  "label": "Отступ подложки, px",
+                  "required": false,
+                  "default": 8,
+                  "help": "Отступ между текстом и краями подложки."
+                },
+                {
+                  "name": "captionOutline",
+                  "type": "number",
+                  "label": "Толщина обводки",
+                  "required": false,
+                  "default": 2,
+                  "help": "0 — без обводки."
+                },
+                {
+                  "name": "captionBold",
+                  "type": "boolean",
+                  "label": "Жирный",
+                  "required": false,
+                  "default": true,
+                  "help": "Жирное начертание надписи."
+                }
+              ]
             }
           ],
-          "help": "Текст и внешний вид надписи на этом кадре."
+          "help": "По умолчанию надпись выключена."
         },
         {
-          "name": "motionSettings",
-          "type": "collection",
+          "name": "motionMode",
+          "type": "select",
           "label": "Движение кадра",
           "required": false,
-          "spec": [
+          "default": "auto",
+          "options": [
             {
-              "name": "type",
-              "type": "select",
-              "label": "Тип зума",
-              "required": false,
-              "default": "auto",
-              "options": [
-                { "label": "Авто", "value": "auto" },
-                { "label": "Выкл", "value": "none" },
-                { "label": "Плавный наезд", "value": "smooth-in" },
-                { "label": "Плавный отъезд", "value": "smooth-out" },
-                { "label": "Резкий зум", "value": "sharp" }
-              ],
-              "help": "Плавный — постепенный наезд. Резкий — мгновенный скачок масштаба."
+              "label": "Авто",
+              "value": "auto"
             },
             {
-              "name": "zoomPercent",
-              "type": "number",
-              "label": "Сила зума, %",
-              "required": false,
-              "default": 20,
-              "help": "Процент приближения. 20% — лёгкий наезд, 50% — заметный акцент, 100%+ — сильное приближение."
+              "label": "Выкл",
+              "value": "none"
             },
             {
-              "name": "zoomAt",
-              "type": "number",
-              "label": "Момент зума, сек",
-              "required": false,
-              "help": "Для резкого зума: через сколько секунд после начала кадра сделать скачок. Пусто — середина кадра."
-            },
-            {
-              "name": "direction",
-              "type": "select",
-              "label": "Направление",
-              "required": false,
-              "default": "center",
-              "options": [
-                { "label": "Центр", "value": "center" },
-                { "label": "Верхний левый угол", "value": "top-left" },
-                { "label": "Верхний правый угол", "value": "top-right" },
-                { "label": "Нижний левый угол", "value": "bottom-left" },
-                { "label": "Нижний правый угол", "value": "bottom-right" },
-                { "label": "Влево", "value": "left" },
-                { "label": "Вправо", "value": "right" }
-              ],
-              "help": "Куда смещается камера при зуме."
+              "label": "Настроить",
+              "value": "custom",
+              "nested": [
+                {
+                  "name": "motionType",
+                  "type": "select",
+                  "label": "Тип зума",
+                  "required": false,
+                  "default": "smooth-in",
+                  "options": [
+                    {
+                      "label": "Плавный наезд",
+                      "value": "smooth-in"
+                    },
+                    {
+                      "label": "Плавный отъезд",
+                      "value": "smooth-out"
+                    },
+                    {
+                      "label": "Резкий зум",
+                      "value": "sharp"
+                    }
+                  ],
+                  "help": "Плавный — постепенный. Резкий — скачок масштаба."
+                },
+                {
+                  "name": "zoomPercent",
+                  "type": "number",
+                  "label": "Сила зума, %",
+                  "required": false,
+                  "default": 20,
+                  "help": "20% — лёгкий наезд, 50% — заметный акцент."
+                },
+                {
+                  "name": "zoomAt",
+                  "type": "number",
+                  "label": "Момент зума, сек",
+                  "required": false,
+                  "help": "Для резкого зума. Пусто — середина кадра."
+                },
+                {
+                  "name": "direction",
+                  "type": "select",
+                  "label": "Направление",
+                  "required": false,
+                  "default": "center",
+                  "options": [
+                    {
+                      "label": "Центр",
+                      "value": "center"
+                    },
+                    {
+                      "label": "Верхний левый угол",
+                      "value": "top-left"
+                    },
+                    {
+                      "label": "Верхний правый угол",
+                      "value": "top-right"
+                    },
+                    {
+                      "label": "Нижний левый угол",
+                      "value": "bottom-left"
+                    },
+                    {
+                      "label": "Нижний правый угол",
+                      "value": "bottom-right"
+                    },
+                    {
+                      "label": "Влево",
+                      "value": "left"
+                    },
+                    {
+                      "label": "Вправо",
+                      "value": "right"
+                    }
+                  ],
+                  "help": "Куда смещается камера при зуме."
+                }
+              ]
             }
           ],
-          "help": "Зум и движение внутри кадра."
+          "help": "По умолчанию движение подбирается автоматически."
         }
       ]
     },
@@ -237,9 +324,24 @@
           "type": "collection",
           "label": "Слово",
           "spec": [
-            { "name": "text", "type": "text", "label": "Слово", "required": true },
-            { "name": "start", "type": "number", "label": "Начало, сек", "required": true },
-            { "name": "end", "type": "number", "label": "Конец, сек", "required": true }
+            {
+              "name": "text",
+              "type": "text",
+              "label": "Слово",
+              "required": true
+            },
+            {
+              "name": "start",
+              "type": "number",
+              "label": "Начало, сек",
+              "required": true
+            },
+            {
+              "name": "end",
+              "type": "number",
+              "label": "Конец, сек",
+              "required": true
+            }
           ]
         },
         "help": "Массив слов с временем начала и конца. Используется для точной подсветки слов."
@@ -251,9 +353,18 @@
         "required": false,
         "default": "word-highlight",
         "options": [
-          { "label": "Подсветка слов", "value": "word-highlight" },
-          { "label": "Одно крупное слово", "value": "single-word" },
-          { "label": "Фразы", "value": "phrase" }
+          {
+            "label": "Подсветка слов",
+            "value": "word-highlight"
+          },
+          {
+            "label": "Одно крупное слово",
+            "value": "single-word"
+          },
+          {
+            "label": "Фразы",
+            "value": "phrase"
+          }
         ],
         "help": "Выбери стиль отображения субтитров."
       },
@@ -264,11 +375,26 @@
         "required": false,
         "default": "fade",
         "options": [
-          { "label": "Без анимации", "value": "none" },
-          { "label": "Плавное появление", "value": "fade" },
-          { "label": "Pop", "value": "pop" },
-          { "label": "Slide Up", "value": "slide-up" },
-          { "label": "Bounce", "value": "bounce" }
+          {
+            "label": "Без анимации",
+            "value": "none"
+          },
+          {
+            "label": "Плавное появление",
+            "value": "fade"
+          },
+          {
+            "label": "Pop",
+            "value": "pop"
+          },
+          {
+            "label": "Slide Up",
+            "value": "slide-up"
+          },
+          {
+            "label": "Bounce",
+            "value": "bounce"
+          }
         ],
         "help": "Как появляется новый текст."
       },
@@ -279,9 +405,18 @@
         "required": false,
         "default": "bottom",
         "options": [
-          { "label": "Снизу", "value": "bottom" },
-          { "label": "По центру", "value": "center" },
-          { "label": "Сверху", "value": "top" }
+          {
+            "label": "Снизу",
+            "value": "bottom"
+          },
+          {
+            "label": "По центру",
+            "value": "center"
+          },
+          {
+            "label": "Сверху",
+            "value": "top"
+          }
         ],
         "help": "Где показывать субтитры. Для Reels/Shorts лучше не ставить слишком низко."
       },
@@ -292,22 +427,70 @@
         "required": false,
         "default": "Inter",
         "options": [
-          { "label": "Inter", "value": "Inter" },
-          { "label": "Inter Bold", "value": "Inter:bold" },
-          { "label": "Roboto", "value": "Roboto" },
-          { "label": "Roboto Bold", "value": "Roboto:bold" },
-          { "label": "Montserrat", "value": "Montserrat" },
-          { "label": "Montserrat Bold", "value": "Montserrat:bold" },
-          { "label": "Oswald", "value": "Oswald" },
-          { "label": "Oswald Bold", "value": "Oswald:bold" },
-          { "label": "Raleway", "value": "Raleway" },
-          { "label": "Raleway Bold", "value": "Raleway:bold" },
-          { "label": "Nunito", "value": "Nunito" },
-          { "label": "Nunito Bold", "value": "Nunito:bold" },
-          { "label": "Bebas Neue", "value": "BebasNeue" },
-          { "label": "Bebas Neue Bold", "value": "BebasNeue:bold" },
-          { "label": "Ubuntu", "value": "Ubuntu" },
-          { "label": "Ubuntu Bold", "value": "Ubuntu:bold" }
+          {
+            "label": "Inter",
+            "value": "Inter"
+          },
+          {
+            "label": "Inter Bold",
+            "value": "Inter:bold"
+          },
+          {
+            "label": "Roboto",
+            "value": "Roboto"
+          },
+          {
+            "label": "Roboto Bold",
+            "value": "Roboto:bold"
+          },
+          {
+            "label": "Montserrat",
+            "value": "Montserrat"
+          },
+          {
+            "label": "Montserrat Bold",
+            "value": "Montserrat:bold"
+          },
+          {
+            "label": "Oswald",
+            "value": "Oswald"
+          },
+          {
+            "label": "Oswald Bold",
+            "value": "Oswald:bold"
+          },
+          {
+            "label": "Raleway",
+            "value": "Raleway"
+          },
+          {
+            "label": "Raleway Bold",
+            "value": "Raleway:bold"
+          },
+          {
+            "label": "Nunito",
+            "value": "Nunito"
+          },
+          {
+            "label": "Nunito Bold",
+            "value": "Nunito:bold"
+          },
+          {
+            "label": "Bebas Neue",
+            "value": "BebasNeue"
+          },
+          {
+            "label": "Bebas Neue Bold",
+            "value": "BebasNeue:bold"
+          },
+          {
+            "label": "Ubuntu",
+            "value": "Ubuntu"
+          },
+          {
+            "label": "Ubuntu Bold",
+            "value": "Ubuntu:bold"
+          }
         ],
         "help": "Шрифт субтитров. Bold-варианты используют жирное начертание."
       },
@@ -344,34 +527,45 @@
         "help": "Толщина обводки вокруг букв. 0 — без обводки."
       },
       {
-        "name": "advanced",
-        "type": "collection",
+        "name": "subtitleAdvancedMode",
+        "type": "select",
         "label": "Дополнительно",
         "required": false,
-        "spec": [
+        "default": "off",
+        "options": [
           {
-            "name": "activeWordTextColor",
-            "type": "color",
-            "label": "Активное слово — текст",
-            "required": false,
-            "default": "#FFFFFF",
-            "help": "Цвет текста слова, которое произносится сейчас."
+            "label": "Скрыть",
+            "value": "off"
           },
           {
-            "name": "activeWordBackColor",
-            "type": "color",
-            "label": "Активное слово — фон",
-            "required": false,
-            "default": "#8B5CF6",
-            "help": "Цвет блока под активным словом."
-          },
-          {
-            "name": "keywordColor",
-            "type": "color",
-            "label": "Цвет ключевых слов",
-            "required": false,
-            "default": "#FFD700",
-            "help": "Цвет слов, обёрнутых в *звёздочки*."
+            "label": "Показать",
+            "value": "on",
+            "nested": [
+              {
+                "name": "activeWordTextColor",
+                "type": "color",
+                "label": "Активное слово — текст",
+                "required": false,
+                "default": "#FFFFFF",
+                "help": "Цвет текста активного слова."
+              },
+              {
+                "name": "activeWordBackColor",
+                "type": "color",
+                "label": "Активное слово — фон",
+                "required": false,
+                "default": "#8B5CF6",
+                "help": "Цвет блока под активным словом."
+              },
+              {
+                "name": "keywordColor",
+                "type": "color",
+                "label": "Цвет ключевых слов",
+                "required": false,
+                "default": "#FFD700",
+                "help": "Цвет слов в *звёздочках*."
+              }
+            ]
           }
         ],
         "help": "Тонкие настройки подсветки слов."
@@ -392,12 +586,30 @@
         "required": false,
         "default": "reels_1080_30",
         "options": [
-          { "label": "Reels / Shorts — 9:16 Full HD 30 FPS", "value": "reels_1080_30" },
-          { "label": "Reels / Shorts — 9:16 Full HD 60 FPS", "value": "reels_1080_60" },
-          { "label": "Reels / Shorts — 9:16 2K 30 FPS", "value": "reels_2k_30" },
-          { "label": "YouTube — 16:9 2K 30 FPS", "value": "youtube_2k_30" },
-          { "label": "Квадрат — 1:1 Full HD 30 FPS", "value": "square_1080_30" },
-          { "label": "Свои настройки ниже", "value": "custom" }
+          {
+            "label": "Reels / Shorts — 9:16 Full HD 30 FPS",
+            "value": "reels_1080_30"
+          },
+          {
+            "label": "Reels / Shorts — 9:16 Full HD 60 FPS",
+            "value": "reels_1080_60"
+          },
+          {
+            "label": "Reels / Shorts — 9:16 2K 30 FPS",
+            "value": "reels_2k_30"
+          },
+          {
+            "label": "YouTube — 16:9 2K 30 FPS",
+            "value": "youtube_2k_30"
+          },
+          {
+            "label": "Квадрат — 1:1 Full HD 30 FPS",
+            "value": "square_1080_30"
+          },
+          {
+            "label": "Свои настройки ниже",
+            "value": "custom"
+          }
         ],
         "help": "Быстрый выбор настроек под Shorts, Reels, YouTube или квадратный формат."
       },
@@ -408,9 +620,18 @@
         "required": false,
         "default": "9:16",
         "options": [
-          { "label": "9:16 — Shorts/Reels", "value": "9:16" },
-          { "label": "16:9 — YouTube", "value": "16:9" },
-          { "label": "1:1 — квадрат", "value": "1:1" }
+          {
+            "label": "9:16 — Shorts/Reels",
+            "value": "9:16"
+          },
+          {
+            "label": "16:9 — YouTube",
+            "value": "16:9"
+          },
+          {
+            "label": "1:1 — квадрат",
+            "value": "1:1"
+          }
         ],
         "help": "9:16 — Shorts/Reels, 16:9 — YouTube, 1:1 — квадратный формат."
       },
@@ -421,8 +642,14 @@
         "required": false,
         "default": "full-hd",
         "options": [
-          { "label": "Full HD", "value": "full-hd" },
-          { "label": "2K", "value": "2k" }
+          {
+            "label": "Full HD",
+            "value": "full-hd"
+          },
+          {
+            "label": "2K",
+            "value": "2k"
+          }
         ],
         "help": "Full HD — быстрее и легче. 2K — выше качество, но дольше рендер."
       },
@@ -433,11 +660,26 @@
         "required": false,
         "default": "30",
         "options": [
-          { "label": "24", "value": "24" },
-          { "label": "25", "value": "25" },
-          { "label": "30", "value": "30" },
-          { "label": "50", "value": "50" },
-          { "label": "60", "value": "60" }
+          {
+            "label": "24",
+            "value": "24"
+          },
+          {
+            "label": "25",
+            "value": "25"
+          },
+          {
+            "label": "30",
+            "value": "30"
+          },
+          {
+            "label": "50",
+            "value": "50"
+          },
+          {
+            "label": "60",
+            "value": "60"
+          }
         ],
         "help": "30 — основной вариант для Reels/Shorts. 60 — плавнее, но рендер дольше."
       },
@@ -448,15 +690,42 @@
         "required": false,
         "default": "fade",
         "options": [
-          { "label": "Fade — плавное затухание", "value": "fade" },
-          { "label": "Smooth Left — плавно влево", "value": "smoothleft" },
-          { "label": "Smooth Right — плавно вправо", "value": "smoothright" },
-          { "label": "Slide Left — сдвиг влево", "value": "slideleft" },
-          { "label": "Slide Right — сдвиг вправо", "value": "slideright" },
-          { "label": "Zoom In — приближение", "value": "zoomin" },
-          { "label": "Dissolve — растворение", "value": "dissolve" },
-          { "label": "Pixelize — пикселизация", "value": "pixelize" },
-          { "label": "Random — случайный", "value": "random" }
+          {
+            "label": "Fade — плавное затухание",
+            "value": "fade"
+          },
+          {
+            "label": "Smooth Left — плавно влево",
+            "value": "smoothleft"
+          },
+          {
+            "label": "Smooth Right — плавно вправо",
+            "value": "smoothright"
+          },
+          {
+            "label": "Slide Left — сдвиг влево",
+            "value": "slideleft"
+          },
+          {
+            "label": "Slide Right — сдвиг вправо",
+            "value": "slideright"
+          },
+          {
+            "label": "Zoom In — приближение",
+            "value": "zoomin"
+          },
+          {
+            "label": "Dissolve — растворение",
+            "value": "dissolve"
+          },
+          {
+            "label": "Pixelize — пикселизация",
+            "value": "pixelize"
+          },
+          {
+            "label": "Random — случайный",
+            "value": "random"
+          }
         ],
         "help": "Динамичный переход между кадрами. Эти варианты поддерживаются FFmpeg 5.x."
       },
@@ -467,10 +736,22 @@
         "required": false,
         "default": "standard",
         "options": [
-          { "label": "Быстрый", "value": "fast" },
-          { "label": "Стандарт", "value": "standard" },
-          { "label": "Высокий", "value": "high" },
-          { "label": "Максимальный", "value": "ultra" }
+          {
+            "label": "Быстрый",
+            "value": "fast"
+          },
+          {
+            "label": "Стандарт",
+            "value": "standard"
+          },
+          {
+            "label": "Высокий",
+            "value": "high"
+          },
+          {
+            "label": "Максимальный",
+            "value": "ultra"
+          }
         ],
         "help": "Чем выше битрейт, тем лучше качество и больше файл. Для Shorts обычно достаточно «Стандарт»."
       }
@@ -478,64 +759,104 @@
     "help": "Формат итогового ролика."
   },
   {
-    "name": "brandSettings",
-    "type": "collection",
+    "name": "brandMode",
+    "type": "select",
     "label": "Брендинг",
     "required": false,
-    "spec": [
+    "default": "off",
+    "options": [
       {
-        "name": "logoUrl",
-        "type": "url",
-        "label": "Логотип",
-        "required": false,
-        "help": "PNG-логотип. Лучше использовать файл с прозрачным фоном."
+        "label": "Без логотипа",
+        "value": "off"
       },
       {
-        "name": "logoPosition",
-        "type": "select",
-        "label": "Позиция логотипа",
-        "required": false,
-        "default": "top-right",
-        "options": [
-          { "label": "Верхний левый угол", "value": "top-left" },
-          { "label": "Верхний центр", "value": "top-center" },
-          { "label": "Верхний правый угол", "value": "top-right" },
-          { "label": "Нижний левый угол", "value": "bottom-left" },
-          { "label": "Нижний центр", "value": "bottom-center" },
-          { "label": "Нижний правый угол", "value": "bottom-right" }
-        ],
-        "help": "Где разместить логотип на видео."
+        "label": "Добавить логотип",
+        "value": "on",
+        "nested": [
+          {
+            "name": "logoUrl",
+            "type": "url",
+            "label": "Логотип",
+            "required": false,
+            "help": "PNG-логотип с прозрачным фоном."
+          },
+          {
+            "name": "logoPosition",
+            "type": "select",
+            "label": "Позиция логотипа",
+            "required": false,
+            "default": "top-right",
+            "options": [
+              {
+                "label": "Верхний левый угол",
+                "value": "top-left"
+              },
+              {
+                "label": "Верхний центр",
+                "value": "top-center"
+              },
+              {
+                "label": "Верхний правый угол",
+                "value": "top-right"
+              },
+              {
+                "label": "Нижний левый угол",
+                "value": "bottom-left"
+              },
+              {
+                "label": "Нижний центр",
+                "value": "bottom-center"
+              },
+              {
+                "label": "Нижний правый угол",
+                "value": "bottom-right"
+              }
+            ],
+            "help": "Где разместить логотип."
+          }
+        ]
       }
     ],
-    "help": "Логотип и его расположение поверх видео."
+    "help": "По умолчанию логотип выключен."
   },
   {
-    "name": "advancedSettings",
-    "type": "collection",
+    "name": "advancedMode",
+    "type": "select",
     "label": "Дополнительно",
     "required": false,
-    "spec": [
+    "default": "off",
+    "options": [
       {
-        "name": "webhookUrl",
-        "type": "url",
-        "label": "Webhook URL",
-        "required": false,
-        "help": "Сервис отправит результат на этот URL после завершения рендера."
+        "label": "Скрыть",
+        "value": "off"
       },
       {
-        "name": "cleanMetadata",
-        "type": "boolean",
-        "label": "Очистить метаданные",
-        "required": false,
-        "default": true,
-        "help": "Удаляет служебные метаданные входных файлов и часть encoder-информации."
-      },
-      {
-        "name": "resolution",
-        "type": "text",
-        "label": "Resolution fallback",
-        "required": false,
-        "help": "Техническое поле для старых сценариев: например 1080x1920."
+        "label": "Показать",
+        "value": "on",
+        "nested": [
+          {
+            "name": "webhookUrl",
+            "type": "url",
+            "label": "Webhook URL",
+            "required": false,
+            "help": "Сервис отправит результат на этот URL."
+          },
+          {
+            "name": "cleanMetadata",
+            "type": "boolean",
+            "label": "Очистить метаданные",
+            "required": false,
+            "default": true,
+            "help": "Удаляет служебные метаданные."
+          },
+          {
+            "name": "resolution",
+            "type": "text",
+            "label": "Resolution fallback",
+            "required": false,
+            "help": "Техническое поле для старых сценариев: 1080x1920."
+          }
+        ]
       }
     ],
     "help": "Webhook и технические параметры."

@@ -306,9 +306,13 @@ function parseOptionalPositiveNumber(value) {
 
 function normalizeMotionSettings(item = {}) {
   const motion = item.motionSettings || item.motion || {};
+  const motionMode = String(item.motionMode || '').trim().toLowerCase();
   const rawZoomPercent = Number(item.zoomPercent ?? motion.zoomPercent ?? 20);
+  const motionType = motionMode === 'custom'
+    ? (item.motionType || motion.type || 'smooth-in')
+    : motionMode || item.motionType || motion.type || motion.motionType || 'auto';
   return {
-    type: String(item.motionType || motion.type || motion.motionType || 'auto').trim().toLowerCase(),
+    type: String(motionType).trim().toLowerCase(),
     zoomPercent: Number.isFinite(rawZoomPercent) ? Math.min(300, Math.max(0, rawZoomPercent)) : 20,
     zoomAt: parseOptionalPositiveNumber(item.zoomAt ?? motion.zoomAt),
     direction: String(item.motionDirection || motion.direction || motion.motionDirection || 'center').trim().toLowerCase()
@@ -316,7 +320,7 @@ function normalizeMotionSettings(item = {}) {
 }
 
 function normalizeOverlayStyle(item = {}) {
-  const caption = item.overlayCaption || item.caption || {};
+  const caption = item.overlayCaption || item.caption || item;
   return caption.style || caption || item.overlayStyle || item.captionStyle || item.overlaySettings || {};
 }
 
@@ -359,7 +363,16 @@ function normalizeMediaItems(payload = {}) {
         url,
         narrationText: String(item.narrationText || '').trim(),
         sceneRole: String(item.sceneRole || '').trim(),
-        overlayText: String(item.overlayText || item.captionText || item.overlayCaption?.text || item.caption?.text || '').trim(),
+        overlayText: String(
+          item.captionMode === 'off'
+            ? ''
+            : item.overlayText ||
+              item.captionText ||
+              item.overlayCaption?.text ||
+              item.overlayCaption?.captionText ||
+              item.caption?.text ||
+              ''
+        ).trim(),
           durationSeconds: parseOptionalPositiveNumber(item.durationSeconds ?? item.duration ?? item.sceneDuration),
           overlayStyle: normalizeOverlayStyle(item),
           motionSettings: normalizeMotionSettings(item),
