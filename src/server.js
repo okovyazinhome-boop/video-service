@@ -1628,12 +1628,15 @@ function buildAssContent({
   // word-highlight: фоновый блок (дефолт фиолетовый)
   // single-word: без фонового блока (дефолт прозрачный), слово просто крупное
   // phrase: не используется
-  const activeWordTextColour = (subtitleMode === 'word-highlight' || isSingleWord)
+  const activeWordTextColour = subtitleMode === 'word-highlight'
     ? assColorFromHex(subtitleStyle.activeWordTextColor || '#FFFFFF', '&H00FFFFFF')
-    : assColorFromHex('#FFFFFF', '&H00FFFFFF');
+    : primaryColour;
+  const activeWordOutlineColour = subtitleMode === 'word-highlight'
+    ? assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B')
+    : outlineColour;
   const activeWordBackColour = subtitleMode === 'word-highlight'
     ? assColorFromHex(subtitleStyle.activeWordBackColor || '#8B5CF6', '&H00F65C8B')
-    : assColorFromHex('#00000000', '&H00000000'); // single-word и phrase — прозрачный
+    : backColour; // single-word и phrase — без отдельного фонового блока
   const keywordColour = assColorFromHex(subtitleStyle.keywordColor || '#FFD700', '&H0000D7FF');
 
   // Пробрасываем вычисленный maxCharsPerLine в subtitleStyle если не задан вручную
@@ -1693,7 +1696,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,${fontName},${fontSize},${primaryColour},${primaryColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
-Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordBackColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,${activeBorderStyle},${activeOutline},${activeShadow},${alignment},${marginL},${marginR},${marginV},1
+Style: ActiveWord,${fontName},${fontSize},${activeWordTextColour},${activeWordTextColour},${activeWordOutlineColour},${activeWordBackColour},${bold},0,0,0,100,100,0,0,${activeBorderStyle},${activeOutline},${activeShadow},${alignment},${marginL},${marginR},${marginV},1
 Style: KeyWord,${fontName},${fontSize},${keywordColour},${keywordColour},${outlineColour},${backColour},${bold},0,0,0,100,100,0,0,1,${outline},${shadow},${alignment},${marginL},${marginR},${marginV},1
 
 [Events]
@@ -1779,8 +1782,8 @@ function applySubtitlePreset(subtitleStyle = {}) {
 
   if (!presets[presetName]) return subtitleStyle;
   return {
-    ...subtitleStyle,
     ...presets[presetName],
+    ...subtitleStyle,
     preset: presetName
   };
 }
@@ -2697,6 +2700,22 @@ app.get('/result/:jobId', authMiddleware, (req, res) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Video service started on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Video service started on port ${PORT}`);
+  });
+}
+
+module.exports = {
+  app,
+  applySubtitlePreset,
+  assColorFromHex,
+  buildAssContent,
+  buildImageMotionFilter,
+  buildScenePlan,
+  getAllowedTransition,
+  normalizeMediaItems,
+  normalizeMotionSettings,
+  parseVideoSettings,
+  sanitizeAssText
+};
