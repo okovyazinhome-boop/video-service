@@ -499,6 +499,68 @@ function normalizeSubtitleTokenForMatch(text) {
     .trim();
 }
 
+function normalizeSubtitleTermKey(text) {
+  return sanitizeAssText(text)
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .trim();
+}
+
+const SINGLE_SUBTITLE_TERMS = {
+  'эсказэи': 'СКЗИ',
+  'скзи': 'СКЗИ',
+  'джипиэс': 'GPS',
+  'gps': 'GPS',
+  'тэа001': 'ТА 001',
+  'та001': 'ТА 001',
+  'паккод': 'PUK-код',
+  'пуккод': 'PUK-код',
+  'pukкод': 'PUK-код'
+};
+
+const SEQUENCE_SUBTITLE_TERMS = [
+  { keys: ['эс', 'ка', 'зэ', 'и'], text: 'СКЗИ' },
+  { keys: ['джи', 'пи', 'эс'], text: 'GPS' },
+  { keys: ['тэ', 'а', '001'], text: 'ТА 001' },
+  { keys: ['та', '001'], text: 'ТА 001' },
+  { keys: ['та', 'ноль', 'ноль', 'один'], text: 'ТА 001' },
+  { keys: ['тэ', 'а', 'ноль', 'ноль', 'один'], text: 'ТА 001' },
+  { keys: ['пак', 'код'], text: 'PUK-код' },
+  { keys: ['пук', 'код'], text: 'PUK-код' },
+  { keys: ['puk', 'код'], text: 'PUK-код' }
+];
+
+function normalizeSpokenSubtitleTerms(timings = []) {
+  const result = [];
+
+  for (let i = 0; i < timings.length; i++) {
+    const keys = timings.slice(i, i + 5).map((item) => normalizeSubtitleTermKey(item.text));
+    const sequence = SEQUENCE_SUBTITLE_TERMS.find((entry) =>
+      entry.keys.every((key, index) => keys[index] === key)
+    );
+
+    if (sequence) {
+      const endIndex = i + sequence.keys.length - 1;
+      result.push({
+        text: sequence.text,
+        start: timings[i].start,
+        end: timings[endIndex].end
+      });
+      i = endIndex;
+      continue;
+    }
+
+    const key = normalizeSubtitleTermKey(timings[i].text);
+    result.push({
+      ...timings[i],
+      text: SINGLE_SUBTITLE_TERMS[key] || timings[i].text
+    });
+  }
+
+  return result;
+}
+
 function splitWrappedLines(text, maxCharsPerLine = 28) {
   const clean = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
   if (!clean) return [];
@@ -1211,7 +1273,7 @@ function normalizeWordTimings(wordTimings = [], subtitlesText = '') {
     .sort((a, b) => a.start - b.start);
 
   if (!visibleTokens.length) {
-    return timings.filter((item) => item.text);
+    return normalizeSpokenSubtitleTerms(timings.filter((item) => item.text));
   }
 
   let tokenIndex = 0;
@@ -1252,7 +1314,7 @@ function normalizeWordTimings(wordTimings = [], subtitlesText = '') {
     }
   }
 
-  return aligned;
+  return normalizeSpokenSubtitleTerms(aligned);
 }
 
 /**
@@ -2972,6 +3034,7 @@ module.exports = {
   normalizeImageMotion,
   normalizeMediaItems,
   normalizeMotionSettings,
+  normalizeSpokenSubtitleTerms,
   normalizeWordTimings,
   parseVideoSettings,
   sanitizeAssText
