@@ -283,6 +283,14 @@ const ALLOWED_TRANSITIONS = [
   'circlecrop', 'rectcrop', 'distance', 'squeezeh', 'squeezev'
 ];
 
+const CURATED_RANDOM_TRANSITIONS = [
+  'fade',
+  'hblur',
+  'smoothleft',
+  'smoothright',
+  'dissolve'
+];
+
 function getAllowedTransition(transitionType) {
   if (transitionType === 'random') {
     // Возвращаем 'random' — конкретный переход будет выбираться для каждой сцены отдельно
@@ -292,7 +300,7 @@ function getAllowedTransition(transitionType) {
 }
 
 function getRandomTransition() {
-  return ALLOWED_TRANSITIONS[Math.floor(Math.random() * ALLOWED_TRANSITIONS.length)];
+  return CURATED_RANDOM_TRANSITIONS[Math.floor(Math.random() * CURATED_RANDOM_TRANSITIONS.length)];
 }
 
 function guessMediaTypeFromUrl(fileUrl = '') {

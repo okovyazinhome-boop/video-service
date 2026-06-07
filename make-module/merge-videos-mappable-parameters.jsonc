@@ -44,14 +44,13 @@
         "required": false,
         "default": "fade",
         "options": [
-          { "label": "Fade", "value": "fade" },
-          { "label": "Dissolve", "value": "dissolve" },
-          { "label": "Blur", "value": "hblur" },
-          { "label": "Smooth Left", "value": "smoothleft" },
-          { "label": "Smooth Right", "value": "smoothright" },
-          { "label": "Flash White", "value": "fadewhite" }
+          { "label": "Fade — плавное затухание", "value": "fade" },
+          { "label": "Blur — размытие", "value": "hblur" },
+          { "label": "Smooth Left — плавно влево", "value": "smoothleft" },
+          { "label": "Smooth Right — плавно вправо", "value": "smoothright" },
+          { "label": "Dissolve — растворение", "value": "dissolve" }
         ],
-        "help": "Используется только в режиме плавной склейки."
+        "help": "Используется только в режиме плавной склейки. Оставлены только мягкие переходы без резких эффектов."
       },
       {
         "name": "transitionDuration",

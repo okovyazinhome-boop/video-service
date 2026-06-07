@@ -791,22 +791,6 @@
             "value": "fade"
           },
           {
-            "label": "Flash White — белая вспышка",
-            "value": "fadewhite"
-          },
-          {
-            "label": "Flash Black — через чёрный",
-            "value": "fadeblack"
-          },
-          {
-            "label": "Fast Fade — быстрый fade",
-            "value": "fadefast"
-          },
-          {
-            "label": "Slow Fade — мягкий fade",
-            "value": "fadeslow"
-          },
-          {
             "label": "Blur — размытие",
             "value": "hblur"
           },
@@ -819,43 +803,15 @@
             "value": "smoothright"
           },
           {
-            "label": "Slide Left — сдвиг влево",
-            "value": "slideleft"
-          },
-          {
-            "label": "Slide Right — сдвиг вправо",
-            "value": "slideright"
-          },
-          {
-            "label": "Zoom In — приближение",
-            "value": "zoomin"
-          },
-          {
             "label": "Dissolve — растворение",
             "value": "dissolve"
           },
           {
-            "label": "Pixelize — пикселизация",
-            "value": "pixelize"
-          },
-          {
-            "label": "Diagonal — по диагонали",
-            "value": "diagtl"
-          },
-          {
-            "label": "Circle Open — круговое раскрытие",
-            "value": "circleopen"
-          },
-          {
-            "label": "Slice — полосы",
-            "value": "hlslice"
-          },
-          {
-            "label": "Random — случайный",
+            "label": "Случайный — только мягкие топ-переходы",
             "value": "random"
           }
         ],
-        "help": "Динамичный переход между кадрами. Эти варианты поддерживаются FFmpeg 5.x."
+        "help": "Переход между кадрами. В режиме «Случайный» сервис выбирает только мягкие варианты: Fade, Blur, Smooth Left, Smooth Right или Dissolve."
       },
       {
         "name": "bitratePreset",
