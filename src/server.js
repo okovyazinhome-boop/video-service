@@ -1407,6 +1407,10 @@ function clamp01(value, fallback = 0.5) {
   return Math.min(1, Math.max(0, numeric));
 }
 
+function amplifyFocusFactor(value, amount = 1.65) {
+  return clamp01(0.5 + ((clamp01(value) - 0.5) * amount));
+}
+
 function isSmartFocusMotion(motionSettings = {}) {
   const type = String(motionSettings.type || '').trim().toLowerCase();
   return ['smart-object', 'smart', 'object', 'person-object'].includes(type);
@@ -1439,8 +1443,8 @@ function getAlternatingMotionType(frameMotion = {}, sceneIndex = 0) {
 function getMotionFocusFactors(scene, sceneIndex, motionPresetName, useSmartFocus) {
   if (useSmartFocus && scene.smartFocus) {
     return {
-      xFactor: clamp01(scene.smartFocus.xFactor),
-      yFactor: clamp01(scene.smartFocus.yFactor)
+      xFactor: amplifyFocusFactor(scene.smartFocus.xFactor),
+      yFactor: amplifyFocusFactor(scene.smartFocus.yFactor)
     };
   }
 
@@ -1469,6 +1473,23 @@ async function analyzeImageSmartFocus(imagePath) {
 
     const luma = new Float32Array(width * height);
     let avgLuma = 0;
+    const bgSamples = [
+      [0, 0],
+      [width - 1, 0],
+      [0, height - 1],
+      [width - 1, height - 1]
+    ];
+    const bg = { r: 0, g: 0, b: 0 };
+
+    for (const [x, y] of bgSamples) {
+      const offset = (y * width + x) * channels;
+      bg.r += data[offset];
+      bg.g += data[offset + 1];
+      bg.b += data[offset + 2];
+    }
+    bg.r /= bgSamples.length;
+    bg.g /= bgSamples.length;
+    bg.b /= bgSamples.length;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -1484,9 +1505,8 @@ async function analyzeImageSmartFocus(imagePath) {
 
     avgLuma /= width * height;
 
-    let totalWeight = 0;
-    let weightedX = 0;
-    let weightedY = 0;
+    const weights = new Float32Array(width * height);
+    const sortedWeights = [];
 
     for (let y = 1; y < height; y++) {
       for (let x = 1; x < width; x++) {
@@ -1500,8 +1520,33 @@ async function analyzeImageSmartFocus(imagePath) {
         const saturation = max === 0 ? 0 : (max - min) / max;
         const edge = Math.abs(luma[index] - luma[index - 1]) + Math.abs(luma[index] - luma[index - width]);
         const contrast = Math.abs(luma[index] - avgLuma);
-        const centerBias = 1 - (Math.abs((x / (width - 1)) - 0.5) + Math.abs((y / (height - 1)) - 0.5)) * 0.35;
-        const weight = Math.max(0, (edge * 1.2) + (saturation * 45) + (contrast * 0.25)) * Math.max(0.65, centerBias);
+        const bgDistance = Math.sqrt(
+          ((r - bg.r) ** 2) +
+          ((g - bg.g) ** 2) +
+          ((b - bg.b) ** 2)
+        );
+        const weight = Math.max(0, (edge * 1.4) + (saturation * 55) + (contrast * 0.35) + (bgDistance * 0.75));
+
+        weights[index] = weight;
+        sortedWeights.push(weight);
+      }
+    }
+
+    sortedWeights.sort((a, b) => a - b);
+    const threshold = Math.max(
+      12,
+      sortedWeights[Math.floor(sortedWeights.length * 0.82)] || 0
+    );
+
+    let totalWeight = 0;
+    let weightedX = 0;
+    let weightedY = 0;
+
+    for (let y = 1; y < height; y++) {
+      for (let x = 1; x < width; x++) {
+        const index = y * width + x;
+        const weight = weights[index];
+        if (weight < threshold) continue;
 
         totalWeight += weight;
         weightedX += x * weight;
@@ -1855,7 +1900,7 @@ function buildAssContent({
   }
 
   // Нормализуем wordTimings или генерируем fallback по длительности аудио
-  let normalizedWordTimings = normalizeWordTimings(wordTimings, subtitlesText);
+  let normalizedWordTimings = normalizeWordTimings(wordTimings);
   if (!normalizedWordTimings.length && subtitlesText && duration > 0) {
     normalizedWordTimings = generateWordTimingsFromDuration(subtitlesText, duration);
   }
@@ -2917,6 +2962,7 @@ if (require.main === module) {
 
 module.exports = {
   app,
+  analyzeImageSmartFocus,
   applySubtitlePreset,
   assColorFromHex,
   buildAssContent,
@@ -2926,6 +2972,7 @@ module.exports = {
   normalizeImageMotion,
   normalizeMediaItems,
   normalizeMotionSettings,
+  normalizeWordTimings,
   parseVideoSettings,
   sanitizeAssText
 };
