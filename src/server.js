@@ -6,6 +6,12 @@ const path = require('path');
 const axios = require('axios');
 const { spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
+let sharp = null;
+try {
+  sharp = require('sharp');
+} catch (error) {
+  console.warn(`[smart-focus] sharp is not available: ${error.message}`);
+}
 
 dotenv.config();
 
@@ -318,11 +324,17 @@ function normalizeMotionSettings(item = {}) {
   const motionType = motionMode === 'custom'
     ? (item.motionType || motion.type || 'smooth-in')
     : motionMode || item.motionType || motion.type || motion.motionType || 'auto';
+  const rawZoomInPercent = Number(item.zoomInPercent ?? motion.zoomInPercent ?? 20);
+  const rawZoomOutPercent = Number(item.zoomOutPercent ?? motion.zoomOutPercent ?? 35);
   return {
     type: String(motionType).trim().toLowerCase(),
     zoomPercent: Number.isFinite(rawZoomPercent) ? Math.min(300, Math.max(0, rawZoomPercent)) : 20,
+    zoomInPercent: Number.isFinite(rawZoomInPercent) ? Math.min(300, Math.max(0, rawZoomInPercent)) : 20,
+    zoomOutPercent: Number.isFinite(rawZoomOutPercent) ? Math.min(300, Math.max(0, rawZoomOutPercent)) : 35,
     zoomAt: parseOptionalPositiveNumber(item.zoomAt ?? motion.zoomAt),
-    direction: String(item.motionDirection || motion.direction || motion.motionDirection || 'center').trim().toLowerCase()
+    direction: String(item.motionDirection || item.direction || motion.direction || motion.motionDirection || 'center').trim().toLowerCase(),
+    pattern: String(item.motionPattern || motion.pattern || motion.motionPattern || 'alternate').trim().toLowerCase(),
+    strength: String(item.motionStrength || motion.strength || motion.motionStrength || 'balanced').trim().toLowerCase()
   };
 }
 
@@ -1389,6 +1401,126 @@ const MOTION_DIRECTIONS = {
   right: { xFactor: 1.00, yFactor: 0.50 }
 };
 
+function clamp01(value, fallback = 0.5) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(1, Math.max(0, numeric));
+}
+
+function isSmartFocusMotion(motionSettings = {}) {
+  const type = String(motionSettings.type || '').trim().toLowerCase();
+  return ['smart-object', 'smart', 'object', 'person-object'].includes(type);
+}
+
+function getMotionStrengthPercents(frameMotion = {}) {
+  const strength = String(frameMotion.strength || 'balanced').trim().toLowerCase();
+  if (strength === 'soft') {
+    return { zoomInPercent: 10, zoomOutPercent: 20 };
+  }
+  if (strength === 'dynamic') {
+    return { zoomInPercent: 35, zoomOutPercent: 50 };
+  }
+  if (strength === 'custom') {
+    return {
+      zoomInPercent: Math.min(300, Math.max(0, Number(frameMotion.zoomInPercent || 20))),
+      zoomOutPercent: Math.min(300, Math.max(0, Number(frameMotion.zoomOutPercent || 35)))
+    };
+  }
+  return { zoomInPercent: 20, zoomOutPercent: 35 };
+}
+
+function getAlternatingMotionType(frameMotion = {}, sceneIndex = 0) {
+  const pattern = String(frameMotion.pattern || 'alternate').trim().toLowerCase();
+  if (pattern === 'zoom-in' || pattern === 'in') return 'smooth-in';
+  if (pattern === 'zoom-out' || pattern === 'out') return 'smooth-out';
+  return sceneIndex % 2 === 0 ? 'smooth-in' : 'smooth-out';
+}
+
+function getMotionFocusFactors(scene, sceneIndex, motionPresetName, useSmartFocus) {
+  if (useSmartFocus && scene.smartFocus) {
+    return {
+      xFactor: clamp01(scene.smartFocus.xFactor),
+      yFactor: clamp01(scene.smartFocus.yFactor)
+    };
+  }
+
+  const preset = getImageMotionPreset(sceneIndex, motionPresetName);
+  return {
+    xFactor: preset.xFactor,
+    yFactor: preset.yFactor
+  };
+}
+
+async function analyzeImageSmartFocus(imagePath) {
+  if (!sharp) return null;
+
+  try {
+    const { data, info } = await sharp(imagePath)
+      .rotate()
+      .resize(96, 96, { fit: 'inside', withoutEnlargement: true })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const width = info.width;
+    const height = info.height;
+    const channels = info.channels;
+    if (!width || !height || channels < 3) return null;
+
+    const luma = new Float32Array(width * height);
+    let avgLuma = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const offset = (y * width + x) * channels;
+        const r = data[offset];
+        const g = data[offset + 1];
+        const b = data[offset + 2];
+        const value = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        luma[y * width + x] = value;
+        avgLuma += value;
+      }
+    }
+
+    avgLuma /= width * height;
+
+    let totalWeight = 0;
+    let weightedX = 0;
+    let weightedY = 0;
+
+    for (let y = 1; y < height; y++) {
+      for (let x = 1; x < width; x++) {
+        const index = y * width + x;
+        const offset = index * channels;
+        const r = data[offset];
+        const g = data[offset + 1];
+        const b = data[offset + 2];
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const saturation = max === 0 ? 0 : (max - min) / max;
+        const edge = Math.abs(luma[index] - luma[index - 1]) + Math.abs(luma[index] - luma[index - width]);
+        const contrast = Math.abs(luma[index] - avgLuma);
+        const centerBias = 1 - (Math.abs((x / (width - 1)) - 0.5) + Math.abs((y / (height - 1)) - 0.5)) * 0.35;
+        const weight = Math.max(0, (edge * 1.2) + (saturation * 45) + (contrast * 0.25)) * Math.max(0.65, centerBias);
+
+        totalWeight += weight;
+        weightedX += x * weight;
+        weightedY += y * weight;
+      }
+    }
+
+    if (totalWeight <= 0) return null;
+
+    return {
+      xFactor: clamp01(weightedX / totalWeight / Math.max(1, width - 1)),
+      yFactor: clamp01(weightedY / totalWeight / Math.max(1, height - 1))
+    };
+  } catch (error) {
+    console.warn(`[smart-focus] Failed for ${path.basename(imagePath)}: ${error.message}`);
+    return null;
+  }
+}
+
 function getImageMotionPreset(sceneIndex, motionPresetName) {
   if (motionPresetName) {
     const found = MOTION_PRESETS.find((p) => p.dir === motionPresetName);
@@ -1405,14 +1537,18 @@ function normalizeImageMotion(scene, sceneIndex, motionPresetName) {
     return { type: 'none' };
   }
 
-  if (type === 'auto') {
-    const preset = getImageMotionPreset(sceneIndex, motionPresetName);
+  if (type === 'auto' || isSmartFocusMotion(frameMotion)) {
+    const motionType = getAlternatingMotionType(frameMotion, sceneIndex);
+    const percents = getMotionStrengthPercents(frameMotion);
+    const zoomPercent = motionType === 'smooth-out' ? percents.zoomOutPercent : percents.zoomInPercent;
+    const zoomScale = 1 + (zoomPercent / 100);
+    const focus = getMotionFocusFactors(scene, sceneIndex, motionPresetName, isSmartFocusMotion(frameMotion));
     return {
-      type: preset.zoomStep >= 0 ? 'smooth-in' : 'smooth-out',
-      zoomStart: preset.zoomStart,
-      zoomEnd: preset.zoomStep >= 0 ? preset.zoomMax : (preset.zoomMin || 1),
-      xFactor: preset.xFactor,
-      yFactor: preset.yFactor
+      type: motionType,
+      zoomStart: motionType === 'smooth-out' ? zoomScale : 1,
+      zoomEnd: motionType === 'smooth-out' ? 1 : zoomScale,
+      xFactor: focus.xFactor,
+      yFactor: focus.yFactor
     };
   }
 
@@ -2180,11 +2316,22 @@ async function _processJobInner(jobId) {
         sourceDuration = await getMediaDuration(localPath);
       }
 
+      let smartFocus = null;
+      if (type === 'image' && isSmartFocusMotion(item.motionSettings)) {
+        smartFocus = await analyzeImageSmartFocus(localPath);
+        if (smartFocus) {
+          console.log(`[smart-focus] frame ${i + 1}: x=${smartFocus.xFactor.toFixed(2)} y=${smartFocus.yFactor.toFixed(2)}`);
+        } else {
+          console.log(`[smart-focus] frame ${i + 1}: fallback to auto direction`);
+        }
+      }
+
       preparedMedia.push({
         ...item,
         type,
         localPath,
-        sourceDuration
+        sourceDuration,
+        smartFocus
       });
     }
 
@@ -2776,6 +2923,7 @@ module.exports = {
   buildImageMotionFilter,
   buildScenePlan,
   getAllowedTransition,
+  normalizeImageMotion,
   normalizeMediaItems,
   normalizeMotionSettings,
   parseVideoSettings,

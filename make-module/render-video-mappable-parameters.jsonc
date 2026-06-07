@@ -171,13 +171,153 @@
         {
           "name": "motionMode",
           "type": "select",
-          "label": "Движение кадра",
+          "label": "Фокус движения",
           "required": false,
           "default": "auto",
           "options": [
             {
-              "label": "Авто",
-              "value": "auto"
+              "label": "Авто — чередовать направления",
+              "value": "auto",
+              "nested": [
+                {
+                  "name": "motionPattern",
+                  "type": "select",
+                  "label": "Тип движения",
+                  "required": false,
+                  "default": "alternate",
+                  "options": [
+                    {
+                      "label": "Чередовать зум и отдаление",
+                      "value": "alternate"
+                    },
+                    {
+                      "label": "Только зум",
+                      "value": "zoom-in"
+                    },
+                    {
+                      "label": "Только отдаление",
+                      "value": "zoom-out"
+                    }
+                  ],
+                  "help": "По умолчанию: кадр 1 — зум, кадр 2 — отдаление, дальше по циклу."
+                },
+                {
+                  "name": "motionStrength",
+                  "type": "select",
+                  "label": "Сила движения",
+                  "required": false,
+                  "default": "balanced",
+                  "options": [
+                    {
+                      "label": "Сбалансировано — 20% / 35%",
+                      "value": "balanced"
+                    },
+                    {
+                      "label": "Мягко — 10% / 20%",
+                      "value": "soft"
+                    },
+                    {
+                      "label": "Динамично — 35% / 50%",
+                      "value": "dynamic"
+                    },
+                    {
+                      "label": "Вручную",
+                      "value": "custom",
+                      "nested": [
+                        {
+                          "name": "zoomInPercent",
+                          "type": "number",
+                          "label": "Зум, %",
+                          "required": false,
+                          "default": 20,
+                          "help": "На сколько приблизить кадр."
+                        },
+                        {
+                          "name": "zoomOutPercent",
+                          "type": "number",
+                          "label": "Отдаление, %",
+                          "required": false,
+                          "default": 35,
+                          "help": "С какого приближения отъехать назад."
+                        }
+                      ]
+                    }
+                  ],
+                  "help": "Первое число — зум, второе — отдаление."
+                }
+              ]
+            },
+            {
+              "label": "Умный фокус — человек/объект",
+              "value": "smart-object",
+              "nested": [
+                {
+                  "name": "motionPattern",
+                  "type": "select",
+                  "label": "Тип движения",
+                  "required": false,
+                  "default": "alternate",
+                  "options": [
+                    {
+                      "label": "Чередовать зум и отдаление",
+                      "value": "alternate"
+                    },
+                    {
+                      "label": "Только зум",
+                      "value": "zoom-in"
+                    },
+                    {
+                      "label": "Только отдаление",
+                      "value": "zoom-out"
+                    }
+                  ],
+                  "help": "Сервис фокусируется на визуально важной зоне кадра. Если не нашёл — использует авто."
+                },
+                {
+                  "name": "motionStrength",
+                  "type": "select",
+                  "label": "Сила движения",
+                  "required": false,
+                  "default": "balanced",
+                  "options": [
+                    {
+                      "label": "Сбалансировано — 20% / 35%",
+                      "value": "balanced"
+                    },
+                    {
+                      "label": "Мягко — 10% / 20%",
+                      "value": "soft"
+                    },
+                    {
+                      "label": "Динамично — 35% / 50%",
+                      "value": "dynamic"
+                    },
+                    {
+                      "label": "Вручную",
+                      "value": "custom",
+                      "nested": [
+                        {
+                          "name": "zoomInPercent",
+                          "type": "number",
+                          "label": "Зум, %",
+                          "required": false,
+                          "default": 20,
+                          "help": "На сколько приблизить кадр."
+                        },
+                        {
+                          "name": "zoomOutPercent",
+                          "type": "number",
+                          "label": "Отдаление, %",
+                          "required": false,
+                          "default": 35,
+                          "help": "С какого приближения отъехать назад."
+                        }
+                      ]
+                    }
+                  ],
+                  "help": "Первое число — зум, второе — отдаление."
+                }
+              ]
             },
             {
               "label": "Выкл",
@@ -265,7 +405,7 @@
               ]
             }
           ],
-          "help": "По умолчанию движение подбирается автоматически."
+          "help": "Авто чередует направления. Умный фокус ищет главный объект кадра."
         }
       ]
     },
