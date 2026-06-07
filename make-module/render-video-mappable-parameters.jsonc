@@ -407,7 +407,211 @@
         "options": [
           {
             "label": "Свои настройки",
-            "value": "custom"
+            "value": "custom",
+            "nested": [
+              {
+                "name": "mode",
+                "type": "select",
+                "label": "Режим",
+                "required": false,
+                "default": "word-highlight",
+                "options": [
+                  {
+                    "label": "Подсветка слов",
+                    "value": "word-highlight"
+                  },
+                  {
+                    "label": "Одно крупное слово",
+                    "value": "single-word"
+                  },
+                  {
+                    "label": "Фразы",
+                    "value": "phrase"
+                  }
+                ],
+                "help": "Выбери стиль отображения субтитров."
+              },
+              {
+                "name": "animation",
+                "type": "select",
+                "label": "Анимация",
+                "required": false,
+                "default": "fade",
+                "options": [
+                  {
+                    "label": "Без анимации",
+                    "value": "none"
+                  },
+                  {
+                    "label": "Плавное появление",
+                    "value": "fade"
+                  },
+                  {
+                    "label": "Pop",
+                    "value": "pop"
+                  },
+                  {
+                    "label": "Slide Up",
+                    "value": "slide-up"
+                  },
+                  {
+                    "label": "Bounce",
+                    "value": "bounce"
+                  }
+                ],
+                "help": "Как появляется новый текст."
+              },
+              {
+                "name": "fontName",
+                "type": "select",
+                "label": "Шрифт",
+                "required": false,
+                "default": "Inter",
+                "options": [
+                  {
+                    "label": "Inter",
+                    "value": "Inter"
+                  },
+                  {
+                    "label": "Inter Bold",
+                    "value": "Inter:bold"
+                  },
+                  {
+                    "label": "Roboto",
+                    "value": "Roboto"
+                  },
+                  {
+                    "label": "Roboto Bold",
+                    "value": "Roboto:bold"
+                  },
+                  {
+                    "label": "Montserrat",
+                    "value": "Montserrat"
+                  },
+                  {
+                    "label": "Montserrat Bold",
+                    "value": "Montserrat:bold"
+                  },
+                  {
+                    "label": "Oswald",
+                    "value": "Oswald"
+                  },
+                  {
+                    "label": "Oswald Bold",
+                    "value": "Oswald:bold"
+                  },
+                  {
+                    "label": "Raleway",
+                    "value": "Raleway"
+                  },
+                  {
+                    "label": "Raleway Bold",
+                    "value": "Raleway:bold"
+                  },
+                  {
+                    "label": "Nunito",
+                    "value": "Nunito"
+                  },
+                  {
+                    "label": "Nunito Bold",
+                    "value": "Nunito:bold"
+                  },
+                  {
+                    "label": "Bebas Neue",
+                    "value": "BebasNeue"
+                  },
+                  {
+                    "label": "Bebas Neue Bold",
+                    "value": "BebasNeue:bold"
+                  },
+                  {
+                    "label": "Ubuntu",
+                    "value": "Ubuntu"
+                  },
+                  {
+                    "label": "Ubuntu Bold",
+                    "value": "Ubuntu:bold"
+                  }
+                ],
+                "help": "Шрифт субтитров. Bold-варианты используют жирное начертание."
+              },
+              {
+                "name": "fontSize",
+                "type": "number",
+                "label": "Размер",
+                "required": false,
+                "default": 76,
+                "help": "Размер шрифта. По умолчанию подобран для вертикального видео."
+              },
+              {
+                "name": "primaryColor",
+                "type": "color",
+                "label": "Цвет текста",
+                "required": false,
+                "default": "#FFFFFF",
+                "help": "Основной цвет субтитров."
+              },
+              {
+                "name": "outlineColor",
+                "type": "color",
+                "label": "Цвет обводки",
+                "required": false,
+                "default": "#000000",
+                "help": "Обводка помогает читать текст на светлом или пёстром фоне."
+              },
+              {
+                "name": "outline",
+                "type": "number",
+                "label": "Толщина обводки",
+                "required": false,
+                "default": 2,
+                "help": "Толщина обводки вокруг букв. 0 — без обводки."
+              },
+              {
+                "name": "subtitleAdvancedMode",
+                "type": "select",
+                "label": "Дополнительно",
+                "required": false,
+                "default": "off",
+                "options": [
+                  {
+                    "label": "Скрыть",
+                    "value": "off"
+                  },
+                  {
+                    "label": "Показать",
+                    "value": "on",
+                    "nested": [
+                      {
+                        "name": "activeWordTextColor",
+                        "type": "color",
+                        "label": "Активное слово — текст",
+                        "required": false,
+                        "default": "#FFFFFF",
+                        "help": "Цвет текста активного слова."
+                      },
+                      {
+                        "name": "activeWordBackColor",
+                        "type": "color",
+                        "label": "Активное слово — фон",
+                        "required": false,
+                        "default": "#8B5CF6",
+                        "help": "Цвет блока под активным словом."
+                      },
+                      {
+                        "name": "keywordColor",
+                        "type": "color",
+                        "label": "Цвет ключевых слов",
+                        "required": false,
+                        "default": "#FFD700",
+                        "help": "Цвет слов в *звёздочках*."
+                      }
+                    ]
+                  }
+                ],
+                "help": "Тонкие настройки подсветки слов."
+              }
+            ]
           },
           {
             "label": "CapCut White",
@@ -438,59 +642,7 @@
             "value": "blue-karaoke"
           }
         ],
-        "help": "Быстрый стиль субтитров. Если выбран пресет, он задаёт основные цвета, размер и анимацию."
-      },
-      {
-        "name": "mode",
-        "type": "select",
-        "label": "Режим",
-        "required": false,
-        "default": "word-highlight",
-        "options": [
-          {
-            "label": "Подсветка слов",
-            "value": "word-highlight"
-          },
-          {
-            "label": "Одно крупное слово",
-            "value": "single-word"
-          },
-          {
-            "label": "Фразы",
-            "value": "phrase"
-          }
-        ],
-        "help": "Выбери стиль отображения субтитров."
-      },
-      {
-        "name": "animation",
-        "type": "select",
-        "label": "Анимация",
-        "required": false,
-        "default": "fade",
-        "options": [
-          {
-            "label": "Без анимации",
-            "value": "none"
-          },
-          {
-            "label": "Плавное появление",
-            "value": "fade"
-          },
-          {
-            "label": "Pop",
-            "value": "pop"
-          },
-          {
-            "label": "Slide Up",
-            "value": "slide-up"
-          },
-          {
-            "label": "Bounce",
-            "value": "bounce"
-          }
-        ],
-        "help": "Как появляется новый текст."
+        "help": "Выберите готовый стиль или «Свои настройки». При готовом пресете скрытые параметры задаются автоматически; позицию можно менять всегда."
       },
       {
         "name": "position",
@@ -513,156 +665,6 @@
           }
         ],
         "help": "Где показывать субтитры. Для Reels/Shorts лучше не ставить слишком низко."
-      },
-      {
-        "name": "fontName",
-        "type": "select",
-        "label": "Шрифт",
-        "required": false,
-        "default": "Inter",
-        "options": [
-          {
-            "label": "Inter",
-            "value": "Inter"
-          },
-          {
-            "label": "Inter Bold",
-            "value": "Inter:bold"
-          },
-          {
-            "label": "Roboto",
-            "value": "Roboto"
-          },
-          {
-            "label": "Roboto Bold",
-            "value": "Roboto:bold"
-          },
-          {
-            "label": "Montserrat",
-            "value": "Montserrat"
-          },
-          {
-            "label": "Montserrat Bold",
-            "value": "Montserrat:bold"
-          },
-          {
-            "label": "Oswald",
-            "value": "Oswald"
-          },
-          {
-            "label": "Oswald Bold",
-            "value": "Oswald:bold"
-          },
-          {
-            "label": "Raleway",
-            "value": "Raleway"
-          },
-          {
-            "label": "Raleway Bold",
-            "value": "Raleway:bold"
-          },
-          {
-            "label": "Nunito",
-            "value": "Nunito"
-          },
-          {
-            "label": "Nunito Bold",
-            "value": "Nunito:bold"
-          },
-          {
-            "label": "Bebas Neue",
-            "value": "BebasNeue"
-          },
-          {
-            "label": "Bebas Neue Bold",
-            "value": "BebasNeue:bold"
-          },
-          {
-            "label": "Ubuntu",
-            "value": "Ubuntu"
-          },
-          {
-            "label": "Ubuntu Bold",
-            "value": "Ubuntu:bold"
-          }
-        ],
-        "help": "Шрифт субтитров. Bold-варианты используют жирное начертание."
-      },
-      {
-        "name": "fontSize",
-        "type": "number",
-        "label": "Размер",
-        "required": false,
-        "default": 76,
-        "help": "Размер шрифта. По умолчанию подобран для вертикального видео."
-      },
-      {
-        "name": "primaryColor",
-        "type": "color",
-        "label": "Цвет текста",
-        "required": false,
-        "default": "#FFFFFF",
-        "help": "Основной цвет субтитров."
-      },
-      {
-        "name": "outlineColor",
-        "type": "color",
-        "label": "Цвет обводки",
-        "required": false,
-        "default": "#000000",
-        "help": "Обводка помогает читать текст на светлом или пёстром фоне."
-      },
-      {
-        "name": "outline",
-        "type": "number",
-        "label": "Толщина обводки",
-        "required": false,
-        "default": 2,
-        "help": "Толщина обводки вокруг букв. 0 — без обводки."
-      },
-      {
-        "name": "subtitleAdvancedMode",
-        "type": "select",
-        "label": "Дополнительно",
-        "required": false,
-        "default": "off",
-        "options": [
-          {
-            "label": "Скрыть",
-            "value": "off"
-          },
-          {
-            "label": "Показать",
-            "value": "on",
-            "nested": [
-              {
-                "name": "activeWordTextColor",
-                "type": "color",
-                "label": "Активное слово — текст",
-                "required": false,
-                "default": "#FFFFFF",
-                "help": "Цвет текста активного слова."
-              },
-              {
-                "name": "activeWordBackColor",
-                "type": "color",
-                "label": "Активное слово — фон",
-                "required": false,
-                "default": "#8B5CF6",
-                "help": "Цвет блока под активным словом."
-              },
-              {
-                "name": "keywordColor",
-                "type": "color",
-                "label": "Цвет ключевых слов",
-                "required": false,
-                "default": "#FFD700",
-                "help": "Цвет слов в *звёздочках*."
-              }
-            ]
-          }
-        ],
-        "help": "Тонкие настройки подсветки слов."
       }
     ],
     "help": "Текст и внешний вид субтитров."

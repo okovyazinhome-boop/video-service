@@ -22,17 +22,17 @@
       "cleanMetadata": "{{if(get(parameters.advancedMode, 'cleanMetadata') !== undefined, get(parameters.advancedMode, 'cleanMetadata'), true)}}",
       "subtitleStyle": {
         "preset": "{{if(get(parameters.subtitleSettings, 'preset'), get(parameters.subtitleSettings, 'preset'), 'custom')}}",
-        "mode": "{{if(get(parameters.subtitleSettings, 'mode'), get(parameters.subtitleSettings, 'mode'), 'word-highlight')}}",
         "position": "{{if(get(parameters.subtitleSettings, 'position'), get(parameters.subtitleSettings, 'position'), 'bottom')}}",
-        "animation": "{{if(get(parameters.subtitleSettings, 'animation'), get(parameters.subtitleSettings, 'animation'), 'fade')}}",
-        "fontName": "{{if(get(parameters.subtitleSettings, 'fontName'), get(parameters.subtitleSettings, 'fontName'), 'Inter')}}",
-        "fontSize": "{{if(get(parameters.subtitleSettings, 'fontSize'), get(parameters.subtitleSettings, 'fontSize'), omit)}}",
-        "primaryColor": "{{ifempty(get(parameters.subtitleSettings, 'primaryColor'), '#FFFFFF')}}",
-        "outlineColor": "{{ifempty(get(parameters.subtitleSettings, 'outlineColor'), '#000000')}}",
-        "outline": "{{if(get(parameters.subtitleSettings, 'outline') !== undefined, get(parameters.subtitleSettings, 'outline'), 2)}}",
-        "activeWordTextColor": "{{if(get(parameters.subtitleSettings, 'activeWordTextColor'), get(parameters.subtitleSettings, 'activeWordTextColor'), omit)}}",
-        "activeWordBackColor": "{{if(get(parameters.subtitleSettings, 'activeWordBackColor'), get(parameters.subtitleSettings, 'activeWordBackColor'), omit)}}",
-        "keywordColor": "{{ifempty(get(parameters.subtitleSettings, 'keywordColor'), '#FFD700')}}"
+        "mode": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', if(get(parameters.subtitleSettings, 'mode'), get(parameters.subtitleSettings, 'mode'), 'word-highlight'), omit)}}",
+        "animation": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', if(get(parameters.subtitleSettings, 'animation'), get(parameters.subtitleSettings, 'animation'), 'fade'), omit)}}",
+        "fontName": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', if(get(parameters.subtitleSettings, 'fontName'), get(parameters.subtitleSettings, 'fontName'), 'Inter'), omit)}}",
+        "fontSize": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', if(get(parameters.subtitleSettings, 'fontSize'), get(parameters.subtitleSettings, 'fontSize'), omit), omit)}}",
+        "primaryColor": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', ifempty(get(parameters.subtitleSettings, 'primaryColor'), '#FFFFFF'), omit)}}",
+        "outlineColor": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', ifempty(get(parameters.subtitleSettings, 'outlineColor'), '#000000'), omit)}}",
+        "outline": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', if(get(parameters.subtitleSettings, 'outline') !== undefined, get(parameters.subtitleSettings, 'outline'), 2), omit)}}",
+        "activeWordTextColor": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', if(get(parameters.subtitleSettings, 'activeWordTextColor'), get(parameters.subtitleSettings, 'activeWordTextColor'), omit), omit)}}",
+        "activeWordBackColor": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', if(get(parameters.subtitleSettings, 'activeWordBackColor'), get(parameters.subtitleSettings, 'activeWordBackColor'), omit), omit)}}",
+        "keywordColor": "{{if(ifempty(get(parameters.subtitleSettings, 'preset'), 'custom') == 'custom', ifempty(get(parameters.subtitleSettings, 'keywordColor'), '#FFD700'), omit)}}"
       }
     },
     "response": {
