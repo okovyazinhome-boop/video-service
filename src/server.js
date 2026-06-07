@@ -476,6 +476,17 @@ function sanitizeAssText(text) {
     .trim();
 }
 
+function tokenizeSubtitleText(text) {
+  return sanitizeAssText(text).replace(/\n+/g, ' ').split(' ').filter(Boolean);
+}
+
+function normalizeSubtitleTokenForMatch(text) {
+  return sanitizeAssText(text)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .trim();
+}
+
 function splitWrappedLines(text, maxCharsPerLine = 28) {
   const clean = sanitizeAssText(text).replace(/\n+/g, ' ').trim();
   if (!clean) return [];
@@ -1166,22 +1177,70 @@ function buildWordHighlightEventsFromPhraseEvents(phraseEvents, subtitleStyle = 
   return result;
 }
 
-function normalizeWordTimings(wordTimings = []) {
+function normalizeWordTimings(wordTimings = [], subtitlesText = '') {
   if (!Array.isArray(wordTimings)) return [];
 
-  return wordTimings
-    .map((item) => ({
-      text: sanitizeAssText(item.text || item.word || '').replace(/\n+/g, ' ').trim(),
-      start: Number(item.start),
-      end: Number(item.end)
-    }))
+  const visibleTokens = tokenizeSubtitleText(subtitlesText);
+  const timings = wordTimings
+    .map((item) => {
+      const rawText = item.text || item.word || '';
+      return {
+        text: sanitizeAssText(rawText).replace(/\n+/g, ' ').trim(),
+        matchKey: normalizeSubtitleTokenForMatch(rawText),
+        start: Number(item.start),
+        end: Number(item.end)
+      };
+    })
     .filter((item) =>
-      item.text &&
       Number.isFinite(item.start) &&
       Number.isFinite(item.end) &&
       item.end > item.start
     )
     .sort((a, b) => a.start - b.start);
+
+  if (!visibleTokens.length) {
+    return timings.filter((item) => item.text);
+  }
+
+  let tokenIndex = 0;
+  const aligned = [];
+
+  for (const timing of timings) {
+    if (!timing.text && !timing.matchKey) continue;
+
+    let foundIndex = -1;
+    if (timing.matchKey) {
+      const searchEnd = Math.min(visibleTokens.length, tokenIndex + 8);
+      for (let i = tokenIndex; i < searchEnd; i++) {
+        if (normalizeSubtitleTokenForMatch(visibleTokens[i]) === timing.matchKey) {
+          foundIndex = i;
+          break;
+        }
+      }
+    }
+
+    let textTokens = [];
+    if (foundIndex >= tokenIndex) {
+      textTokens = visibleTokens.slice(tokenIndex, foundIndex + 1);
+      tokenIndex = foundIndex + 1;
+    } else if (tokenIndex < visibleTokens.length) {
+      textTokens = [visibleTokens[tokenIndex]];
+      tokenIndex += 1;
+    } else if (timing.text) {
+      textTokens = [timing.text];
+    }
+
+    const text = textTokens.join(' ').trim();
+    if (text) {
+      aligned.push({
+        text,
+        start: timing.start,
+        end: timing.end
+      });
+    }
+  }
+
+  return aligned;
 }
 
 /**
@@ -1192,7 +1251,7 @@ function normalizeWordTimings(wordTimings = []) {
 function generateWordTimingsFromDuration(text, duration) {
   if (!text || !duration || duration <= 0) return [];
 
-  const words = text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const words = tokenizeSubtitleText(text);
   if (!words.length) return [];
 
   // Оставляем небольшие отступы: 0.1с в начале, 0.3с в конце
@@ -1660,7 +1719,7 @@ function buildAssContent({
   }
 
   // Нормализуем wordTimings или генерируем fallback по длительности аудио
-  let normalizedWordTimings = normalizeWordTimings(wordTimings);
+  let normalizedWordTimings = normalizeWordTimings(wordTimings, subtitlesText);
   if (!normalizedWordTimings.length && subtitlesText && duration > 0) {
     normalizedWordTimings = generateWordTimingsFromDuration(subtitlesText, duration);
   }
