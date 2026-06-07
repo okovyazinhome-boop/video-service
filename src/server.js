@@ -1477,14 +1477,16 @@ function escapeFfmpegFilterPath(filePath) {
 }
 
 const MOTION_PRESETS = [
-  { dir: 'zoom-in-center',      zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.50, yFactor: 0.50 },
-  { dir: 'zoom-out-center',     zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.50, yFactor: 0.50 },
-  { dir: 'zoom-in-topleft',     zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.20, yFactor: 0.20 },
-  { dir: 'zoom-in-bottomright', zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.80, yFactor: 0.80 },
-  { dir: 'zoom-out-left',       zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.25, yFactor: 0.50 },
-  { dir: 'zoom-in-topright',    zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.80, yFactor: 0.20 },
-  { dir: 'zoom-in-bottomleft',  zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.20, yFactor: 0.80 },
-  { dir: 'zoom-out-right',      zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.75, yFactor: 0.50 }
+  { dir: 'zoom-in-topleft',      zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.12, yFactor: 0.14 },
+  { dir: 'zoom-out-bottomright', zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.86, yFactor: 0.84 },
+  { dir: 'zoom-in-topright',     zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.86, yFactor: 0.14 },
+  { dir: 'zoom-out-bottomleft',  zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.14, yFactor: 0.84 },
+  { dir: 'zoom-in-left',         zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.12, yFactor: 0.50 },
+  { dir: 'zoom-out-right',       zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.88, yFactor: 0.50 },
+  { dir: 'zoom-in-bottomright',  zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.86, yFactor: 0.84 },
+  { dir: 'zoom-out-left',        zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.12, yFactor: 0.50 },
+  { dir: 'zoom-in-center',       zoomStart: 1.0,  zoomStep: +0.0013, zoomMax: 1.13, zoomMin: null, xFactor: 0.50, yFactor: 0.50 },
+  { dir: 'zoom-out-center',      zoomStart: 1.15, zoomStep: -0.0010, zoomMax: 1.15, zoomMin: 1.0,  xFactor: 0.50, yFactor: 0.50 }
 ];
 
 const MOTION_DIRECTIONS = {
@@ -1634,6 +1636,9 @@ async function analyzeImageSmartFocus(imagePath) {
       sortedWeights[Math.floor(sortedWeights.length * 0.82)] || 0
     );
 
+    const gridCols = 8;
+    const gridRows = 8;
+    const cellWeights = new Float32Array(gridCols * gridRows);
     let totalWeight = 0;
     let weightedX = 0;
     let weightedY = 0;
@@ -1647,10 +1652,65 @@ async function analyzeImageSmartFocus(imagePath) {
         totalWeight += weight;
         weightedX += x * weight;
         weightedY += y * weight;
+
+        const cellX = Math.min(gridCols - 1, Math.floor((x / width) * gridCols));
+        const cellY = Math.min(gridRows - 1, Math.floor((y / height) * gridRows));
+        cellWeights[(cellY * gridCols) + cellX] += weight;
       }
     }
 
     if (totalWeight <= 0) return null;
+
+    let bestCellX = 0;
+    let bestCellY = 0;
+    let bestScore = -Infinity;
+
+    for (let cellY = 0; cellY < gridRows; cellY++) {
+      for (let cellX = 0; cellX < gridCols; cellX++) {
+        let score = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nearX = cellX + dx;
+            const nearY = cellY + dy;
+            if (nearX < 0 || nearX >= gridCols || nearY < 0 || nearY >= gridRows) continue;
+            const multiplier = dx === 0 && dy === 0 ? 1 : 0.35;
+            score += cellWeights[(nearY * gridCols) + nearX] * multiplier;
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestCellX = cellX;
+          bestCellY = cellY;
+        }
+      }
+    }
+
+    let clusterWeight = 0;
+    let clusterX = 0;
+    let clusterY = 0;
+
+    for (let y = 1; y < height; y++) {
+      for (let x = 1; x < width; x++) {
+        const index = y * width + x;
+        const weight = weights[index];
+        if (weight < threshold) continue;
+
+        const cellX = Math.min(gridCols - 1, Math.floor((x / width) * gridCols));
+        const cellY = Math.min(gridRows - 1, Math.floor((y / height) * gridRows));
+        if (Math.abs(cellX - bestCellX) > 1 || Math.abs(cellY - bestCellY) > 1) continue;
+
+        clusterWeight += weight;
+        clusterX += x * weight;
+        clusterY += y * weight;
+      }
+    }
+
+    if (clusterWeight > 0) {
+      return {
+        xFactor: clamp01(clusterX / clusterWeight / Math.max(1, width - 1)),
+        yFactor: clamp01(clusterY / clusterWeight / Math.max(1, height - 1))
+      };
+    }
 
     return {
       xFactor: clamp01(weightedX / totalWeight / Math.max(1, width - 1)),
@@ -1746,6 +1806,14 @@ function buildImageMotionFilter(scene, sceneIndex, width, height, motionPresetNa
   const yExpr = `(ih-ih/zoom)*${motion.yFactor}`;
   const progressExpr = `(on/${Math.max(1, frames - 1)})`;
   const easedProgressExpr = `(${progressExpr}*${progressExpr}*(3-2*${progressExpr}))`;
+
+  if (isSmartFocusMotion(scene.motionSettings || {})) {
+    console.log(
+      `[motion] frame ${sceneIndex + 1}: smart ${scene.smartFocus ? 'found' : 'fallback'} ` +
+      `${motion.type} focus=${motion.xFactor.toFixed(2)},${motion.yFactor.toFixed(2)} ` +
+      `zoom=${motion.zoomStart.toFixed(2)}->${motion.zoomEnd.toFixed(2)}`
+    );
+  }
 
   let zExpr;
   if (motion.type === 'sharp') {
