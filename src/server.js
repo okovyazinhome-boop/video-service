@@ -351,6 +351,30 @@ function normalizeOverlayStyle(item = {}) {
   return caption.style || caption || item.overlayStyle || item.captionStyle || item.overlaySettings || {};
 }
 
+function isFrameCaptionEnabled(item = {}) {
+  if (item.captionMode === undefined || item.captionMode === null || item.captionMode === '') {
+    return true;
+  }
+
+  const value = String(item.captionMode).trim().toLowerCase();
+  return ['on', 'yes', 'true', '1', 'enabled'].includes(value);
+}
+
+function normalizeFrameCaptionText(item = {}) {
+  if (!isFrameCaptionEnabled(item)) {
+    return '';
+  }
+
+  return String(
+    item.overlayText ||
+    item.captionText ||
+    item.overlayCaption?.text ||
+    item.overlayCaption?.captionText ||
+    item.caption?.text ||
+    ''
+  ).trim();
+}
+
 function normalizeVideoBehavior(item = {}) {
   const value = String(item.videoBehavior || item.videoMode || 'clip').trim().toLowerCase();
   if (['loop', 'freeze', 'clip'].includes(value)) return value;
@@ -390,16 +414,7 @@ function normalizeMediaItems(payload = {}) {
         url,
         narrationText: String(item.narrationText || '').trim(),
         sceneRole: String(item.sceneRole || '').trim(),
-        overlayText: String(
-          item.captionMode === 'off'
-            ? ''
-            : item.overlayText ||
-              item.captionText ||
-              item.overlayCaption?.text ||
-              item.overlayCaption?.captionText ||
-              item.caption?.text ||
-              ''
-        ).trim(),
+        overlayText: normalizeFrameCaptionText(item),
           durationSeconds: parseOptionalPositiveNumber(item.durationSeconds ?? item.duration ?? item.sceneDuration),
           overlayStyle: normalizeOverlayStyle(item),
           motionSettings: normalizeMotionSettings(item),
@@ -3141,7 +3156,9 @@ module.exports = {
   buildImageMotionFilter,
   buildScenePlan,
   getAllowedTransition,
+  isFrameCaptionEnabled,
   normalizeImageMotion,
+  normalizeFrameCaptionText,
   normalizeMediaItems,
   normalizeMotionSettings,
   normalizeSpokenSubtitleTerms,
