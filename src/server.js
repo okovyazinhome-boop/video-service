@@ -2933,7 +2933,7 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
+app.get('/health', authMiddleware, (req, res) => {
   res.json({
     ok: true,
     status: 'healthy'
