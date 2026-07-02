@@ -1,0 +1,12 @@
+.git
+.DS_Store
+node_modules
+npm-debug.log
+
+storage/jobs
+storage/output
+storage/temp
+storage/logs
+storage/*.pid
+storage/current-public-url.txt
+storage/.DS_Store
