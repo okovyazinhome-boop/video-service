@@ -2764,7 +2764,7 @@ async function _processJobInner(jobId) {
       const subtitleVideoLabel = 'vsub';
 
       filterParts.push(
-        `[${finalVideoLabel}]subtitles='${escapedSubtitlesPath}':fontsdir='${escapedFontsDir}'[${subtitleVideoLabel}]`
+        `[${finalVideoLabel}]subtitles=filename='${escapedSubtitlesPath}':fontsdir='${escapedFontsDir}'[${subtitleVideoLabel}]`
       );
 
       finalVideoLabel = subtitleVideoLabel;
