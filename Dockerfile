@@ -3,6 +3,7 @@ FROM node:20-bookworm-slim
 # Системные зависимости
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    ca-certificates \
     fonts-dejavu-core \
     fonts-dejavu-extra \
     fonts-noto-color-emoji \
